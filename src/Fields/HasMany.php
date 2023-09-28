@@ -12,8 +12,6 @@ use Laravel\Nova\Panel;
  */
 class HasMany extends Field implements ListableField, RelatableField
 {
-    use DeterminesIfCreateRelationCanBeShown;
-
     /**
      * The field's component.
      *
