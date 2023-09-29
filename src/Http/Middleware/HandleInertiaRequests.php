@@ -46,7 +46,7 @@ class HandleInertiaRequests extends Middleware
                 return Nova::jsonVariables($request);
             },
             'currentUser' => function () use ($request) {
-                return with($request->user(), function ($user) use ($request) {
+                return with(Nova::user($request), function ($user) use ($request) {
                     return ! is_null($user) ? UserResource::make($user)->toArray($request) : null;
                 });
             },

@@ -6,6 +6,7 @@ use DateInterval;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Laravel\Nova\Card;
+use Laravel\Nova\Exceptions\HelperNotSupported;
 use Laravel\Nova\Http\Requests\NovaRequest;
 use Laravel\Nova\Nova;
 
@@ -43,11 +44,7 @@ abstract class Metric extends Card
      */
     public function resolve(NovaRequest $request)
     {
-        $resolver = function () use ($request) {
-            return $this->onlyOnDetail
-                ? $this->calculate($request, $request->findModelOrFail())
-                : $this->calculate($request);
-        };
+        $resolver = $this->getResolver($request);
 
         if ($cacheFor = $this->cacheFor()) {
             $cacheFor = is_numeric($cacheFor) ? new DateInterval(sprintf('PT%dS', $cacheFor * 60)) : $cacheFor;
@@ -63,12 +60,27 @@ abstract class Metric extends Card
     }
 
     /**
+     * Return a resolver function for the metric.
+     *
+     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
+     * @return \Closure(): mixed
+     */
+    public function getResolver(NovaRequest $request)
+    {
+        return function () use ($request) {
+            return $this->onlyOnDetail
+                ? $this->calculate($request, $request->findModelOrFail())
+                : $this->calculate($request);
+        };
+    }
+
+    /**
      * Get the appropriate cache key for the metric.
      *
      * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
      * @return string
      */
-    protected function getCacheKey(NovaRequest $request)
+    public function getCacheKey(NovaRequest $request)
     {
         return sprintf(
             'nova.metric.%s.%s.%s.%s.%s.%s',
@@ -119,7 +131,9 @@ abstract class Metric extends Card
      */
     public function refreshWhenActionsRun($value = true)
     {
-        return $this->refreshWhenActionsRun($value);
+        $this->refreshWhenActionRuns = $value;
+
+        return $this;
     }
 
     /**
@@ -132,9 +146,7 @@ abstract class Metric extends Card
      */
     public function refreshWhenActionRuns($value = true)
     {
-        $this->refreshWhenActionRuns = $value;
-
-        return $this;
+        return $this->refreshWhenActionsRun($value);
     }
 
     /**
@@ -145,7 +157,27 @@ abstract class Metric extends Card
      */
     public function refreshWhenFiltersChange($value = true)
     {
+        if ($this->onlyOnDetail === true && $value === true) {
+            throw new HelperNotSupported(sprintf('The %s helper method is not compatible with onlyOnDetail helper.', __METHOD__));
+        }
+
         $this->refreshWhenFiltersChange = $value;
+
+        return $this;
+    }
+
+    /**
+     * Specify that the element should only be shown on the detail view.
+     *
+     * @return $this
+     */
+    public function onlyOnDetail()
+    {
+        if ($this->refreshWhenFiltersChange === true) {
+            throw new HelperNotSupported(sprintf('The %s helper method is not compatible with refreshWhenFiltersChange helper.', __METHOD__));
+        }
+
+        $this->onlyOnDetail = true;
 
         return $this;
     }

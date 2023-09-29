@@ -42,6 +42,38 @@ class UpdateAttached extends Page
     }
 
     /**
+     * Create a new page instance for Belongs-to-Many.
+     *
+     * @param  string  $resourceName
+     * @param  string  $resourceId
+     * @param  string  $relation
+     * @param  string  $relatedId
+     * @param  string|null  $viaRelationship
+     * @param  string|null  $viaPivotId
+     * @return static
+     */
+    public static function belongsToMany($resourceName, $resourceId, $relation, $relatedId, $viaRelationship = null, $viaPivotId = null)
+    {
+        return new static($resourceName, $resourceId, $relation, $relatedId, $viaRelationship, $viaPivotId);
+    }
+
+    /**
+     * Create a new page instance for Morph-to-Many.
+     *
+     * @param  string  $resourceName
+     * @param  string  $resourceId
+     * @param  string  $relation
+     * @param  string  $relatedId
+     * @param  string|null  $viaRelationship
+     * @param  string|null  $viaPivotId
+     * @return static
+     */
+    public static function morphToMany($resourceName, $resourceId, $relation, $relatedId, $viaRelationship = null, $viaPivotId = null)
+    {
+        return new static($resourceName, $resourceId, $relation, $relatedId, $viaRelationship, $viaPivotId);
+    }
+
+    /**
      * Get the URL for the page.
      *
      * @return string
@@ -62,7 +94,9 @@ class UpdateAttached extends Page
      */
     public function update(Browser $browser)
     {
-        $browser->click('@update-button')->pause(750);
+        $browser->dismissToasted()
+            ->click('@update-button')
+            ->pause(750);
     }
 
     /**
@@ -73,7 +107,21 @@ class UpdateAttached extends Page
      */
     public function updateAndContinueEditing(Browser $browser)
     {
-        $browser->click('@update-and-continue-editing-button')->pause(750);
+        $browser->dismissToasted()
+            ->click('@update-and-continue-editing-button')
+            ->pause(750);
+    }
+
+    /**
+     * Click the cancel button.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @return void
+     */
+    public function cancel(Browser $browser)
+    {
+        $browser->dismissToasted()
+            ->click('@cancel-update-attached-button');
     }
 
     /**

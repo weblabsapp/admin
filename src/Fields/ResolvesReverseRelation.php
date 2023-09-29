@@ -64,11 +64,17 @@ trait ResolvesReverseRelation
                             return false;
                         }
 
+                        $model = $resource->model();
+
+                        if (! method_exists($viaModel, $field->attribute) || ! method_exists($model, $this->attribute)) {
+                            return false;
+                        }
+
                         $relation = $viaModel->{$field->attribute}();
 
                         return $this->getRelationForeignKeyName($relation) === $this->getRelationForeignKeyName(
-                                $resource->model()->{$this->attribute}()
-                            );
+                            $resource->model()->{$this->attribute}()
+                        );
                     })->attribute ?? '';
         }
 

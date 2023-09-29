@@ -1,27 +1,30 @@
 <template>
   <div v-if="isNotObject" class="flex items-center key-value-item">
     <div
-      class="flex flex-grow border-b border-gray-300 dark:border-gray-600 key-value-fields"
+      class="flex flex-grow border-b border-gray-200 dark:border-gray-700 key-value-fields"
     >
       <div
         class="flex-none w-48 cursor-text"
         :class="[
           readOnlyKeys || !isEditable
-            ? 'bg-gray-50 dark:bg-gray-700'
+            ? 'bg-gray-50 dark:bg-gray-800'
             : 'bg-white dark:bg-gray-900',
         ]"
       >
         <textarea
+          rows="1"
           :dusk="`key-value-key-${index}`"
           v-model="item.key"
           @focus="handleKeyFieldFocus"
           ref="keyField"
           type="text"
-          class="font-mono text-sm resize-none block min-h-input w-full form-control form-input form-input-row py-4 text-90 dark:text-gray-400 bg-clip-border"
-          :disabled="!isEditable || readOnlyKeys"
+          class="font-mono text-xs resize-none block w-full px-3 py-3 dark:text-gray-400 bg-clip-border focus:outline-none focus:ring focus:ring-inset"
+          :readonly="!isEditable || readOnlyKeys"
+          :tabindex="!isEditable || readOnlyKeys ? -1 : 0"
           style="background-clip: border-box"
           :class="{
-            'bg-white dark:bg-gray-800': !isEditable || readOnlyKeys,
+            'bg-white dark:bg-gray-800 focus:outline-none cursor-not-allowed':
+              !isEditable || readOnlyKeys,
             'hover:bg-20 focus:bg-white dark:bg-gray-900 dark:focus:bg-gray-900':
               isEditable && !readOnlyKeys,
           }"
@@ -30,7 +33,7 @@
 
       <div
         @click="handleValueFieldFocus"
-        class="flex-grow border-l border-gray-300 dark:border-gray-600"
+        class="flex-grow border-l border-gray-200 dark:border-gray-700"
         :class="[
           readOnlyKeys || !isEditable
             ? 'bg-gray-50 dark:bg-gray-700'
@@ -38,16 +41,18 @@
         ]"
       >
         <textarea
+          rows="1"
           :dusk="`key-value-value-${index}`"
           v-model="item.value"
           @focus="handleValueFieldFocus"
           ref="valueField"
           type="text"
-          class="font-mono text-sm block min-h-input w-full form-control form-input form-input-row py-4 text-90 dark:text-gray-400"
-          :disabled="!isEditable"
+          class="font-mono text-xs block w-full px-3 py-3 dark:text-gray-400"
+          :readonly="!isEditable"
+          :tabindex="!isEditable ? -1 : 0"
           :class="{
-            'bg-white dark:bg-gray-800': !isEditable,
-            'hover:bg-20 focus:bg-white dark:bg-gray-900 dark:focus:bg-gray-900 dark:focus:ring':
+            'bg-white dark:bg-gray-800 focus:outline-none': !isEditable,
+            'hover:bg-20 focus:bg-white dark:bg-gray-900 dark:focus:bg-gray-900 focus:outline-none focus:ring focus:ring-inset':
               isEditable,
           }"
         />
@@ -56,16 +61,15 @@
 
     <div
       v-if="isEditable && canDeleteRow"
-      class="flex justify-center h-11 w-11 absolute"
-      style="right: -50px"
+      class="flex justify-center h-11 w-11 absolute -right-[50px]"
     >
       <BasicButton
         @click="$emit('remove-row', item.id)"
         :dusk="`remove-key-value-${index}`"
         type="button"
         tabindex="0"
-        class="flex items-center appearance-none cursor-pointer text-red-500 hover:text-red-600 active:outline-none active:ring focus:outline-none focus:ring"
-        title="Delete"
+        class="flex items-center appearance-none cursor-pointer text-red-500 hover:text-red-600 active:outline-none active:ring focus:outline-none focus:ring ring-primary-200 dark:ring-gray-600"
+        :title="__('Delete')"
       >
         <Icon type="minus-circle" />
       </BasicButton>

@@ -48,12 +48,17 @@ class LensRequest extends NovaRequest
     /**
      * Apply the specified ordering to the given query.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder  $query
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @template TValue of \Illuminate\Database\Eloquent\Builder
+     *
+     * @param  TValue  $query
+     * @param  (callable(TValue): (TValue))|null  $defaultCallback
+     * @return TValue
      */
-    public function withOrdering($query)
+    public function withOrdering($query, $defaultCallback = null)
     {
         if (! $this->orderBy || ! $this->orderByDirection) {
+            with($query, $defaultCallback);
+
             return $query;
         }
 
@@ -111,15 +116,13 @@ class LensRequest extends NovaRequest
     {
         $resource = $this->resource();
 
-        $lens = get_class($this->lens());
-
-        return $models->map(function ($model) use ($resource, $lens) {
-            $lenResource = new $lens($model);
+        return $models->map(function ($model) use ($resource) {
+            $lensResource = $this->lens()->setResource($model);
 
             return transform((new $resource($model))->serializeForIndex(
-                $this, $lenResource->resolveFields($this)
-            ), function ($payload) use ($model, $lenResource) {
-                $payload['actions'] = collect(array_values($lenResource->actions($this)))
+                $this, $lensResource->resolveFields($this)
+            ), function ($payload) use ($model, $lensResource) {
+                $payload['actions'] = collect(array_values($lensResource->actions($this)))
                         ->filter(function ($action) {
                             return $action->shownOnIndex() || $action->shownOnTableRow();
                         })

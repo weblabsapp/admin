@@ -2,7 +2,7 @@
   <button
     type="button"
     @click.prevent="handleClick"
-    class="cursor-pointer inline-flex items-center"
+    class="cursor-pointer inline-flex items-center focus:outline-none focus:ring ring-primary-200 dark:ring-gray-600 rounded"
     :dusk="'sort-' + uriKey"
     :aria-sort="ariaSort"
   >
@@ -44,9 +44,11 @@ export default {
     uriKey: String,
   },
 
+  inject: ['orderByParameter', 'orderByDirectionParameter'],
+
   methods: {
     /**
-     * Handle the clicke event.
+     * Handle the click event.
      */
     handleClick() {
       if (this.isSorted && this.isDescDirection) {
@@ -111,7 +113,7 @@ export default {
      * The current order query parameter for this resource
      */
     sortKey() {
-      return `${this.resourceName}_order`
+      return this.orderByParameter
     },
 
     /**
@@ -125,7 +127,7 @@ export default {
      * The current direction query parameter for this resource
      */
     directionKey() {
-      return `${this.resourceName}_direction`
+      return this.orderByDirectionParameter
     },
 
     /**

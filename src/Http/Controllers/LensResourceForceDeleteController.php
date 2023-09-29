@@ -31,7 +31,7 @@ class LensResourceForceDeleteController extends Controller
 
                 Nova::usingActionEvent(function ($actionEvent) use ($model, $request) {
                     $actionEvent->insert(
-                        $actionEvent->forResourceDelete($request->user(), collect([$model]))
+                        $actionEvent->forResourceDelete(Nova::user($request), collect([$model]))
                             ->map->getAttributes()->all()
                     );
                 });

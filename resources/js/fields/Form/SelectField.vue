@@ -3,6 +3,7 @@
     :field="currentField"
     :errors="errors"
     :show-help-text="showHelpText"
+    :full-width-content="fullWidthContent"
   >
     <template #field>
       <!-- Search Input -->
@@ -18,6 +19,7 @@
         :clearable="currentField.nullable"
         trackBy="value"
         class="w-full"
+        :mode="mode"
       >
         <!-- The Selected Option Slot -->
         <div v-if="selectedOption" class="flex items-center">
@@ -27,7 +29,7 @@
         <template #option="{ selected, option }">
           <!-- Options List Slot -->
           <div
-            class="flex items-center text-sm font-semibold leading-5 text-90"
+            class="flex items-center text-sm font-semibold leading-5"
             :class="{ 'text-white': selected }"
           >
             {{ option.label }}
@@ -92,7 +94,7 @@ export default {
      * are truthy or falsey
      */
     fill(formData) {
-      formData.append(this.field.attribute, this.value ?? '')
+      this.fillIfVisible(formData, this.fieldAttribute, this.value ?? '')
     },
 
     /**
@@ -110,7 +112,7 @@ export default {
       this.value = ''
 
       if (this.field) {
-        this.emitFieldValueChange(this.field.attribute, this.value)
+        this.emitFieldValueChange(this.fieldAttribute, this.value)
       }
     },
 
@@ -127,7 +129,7 @@ export default {
       this.value = option.value
 
       if (this.field) {
-        this.emitFieldValueChange(this.field.attribute, this.value)
+        this.emitFieldValueChange(this.fieldAttribute, this.value)
       }
     },
 
@@ -148,27 +150,37 @@ export default {
      */
     onSyncedField() {
       let currentSelectedOption = null
+      let hasValue = false
 
       if (this.selectedOption) {
+        hasValue = true
         currentSelectedOption = find(
           this.currentField.options,
           v => v.value == this.selectedOption.value
         )
       }
 
-      if (!currentSelectedOption) {
+      let selectedOption = find(
+        this.currentField.options,
+        v => v.value == this.currentField.value
+      )
+
+      if (isNil(currentSelectedOption)) {
         this.clearSelection()
 
         if (this.currentField.value) {
-          let selectedOption = find(
-            this.currentField.options,
-            v => v.value == this.currentField.value
-          )
-
           this.selectOption(selectedOption)
-        } else if (!this.currentField.nullable) {
+        } else if (hasValue && !this.currentField.nullable) {
           this.selectOption(first(this.currentField.options))
         }
+
+        return
+      } else if (
+        currentSelectedOption &&
+        selectedOption &&
+        ['create', 'attach'].includes(this.editMode)
+      ) {
+        this.selectOption(selectedOption)
 
         return
       }
@@ -189,7 +201,7 @@ export default {
      * Return the field options filtered by the search string.
      */
     filteredOptions() {
-      return this.field.options.filter(option => {
+      return this.currentField.options.filter(option => {
         return (
           option.label.toLowerCase().indexOf(this.search.toLowerCase()) > -1
         )
@@ -204,7 +216,7 @@ export default {
     },
 
     /**
-     * Return value has been setted.
+     * Determine if the field has a non-empty value.
      */
     hasValue() {
       return Boolean(

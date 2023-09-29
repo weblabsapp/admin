@@ -3,6 +3,7 @@
     :field="currentField"
     :errors="errors"
     :show-help-text="showHelpText"
+    :full-width-content="fullWidthContent"
   >
     <template #field>
       <Checkbox
@@ -32,7 +33,7 @@ export default {
      * Set the initial value for the field
      */
     setInitialValue() {
-      this.value = this.currentField.value || this.value
+      this.value = this.currentField.value ?? this.value
     },
 
     /**
@@ -40,14 +41,14 @@ export default {
      * field's internal value attribute
      */
     fill(formData) {
-      formData.append(this.field.attribute, this.trueValue)
+      this.fillIfVisible(formData, this.fieldAttribute, this.trueValue)
     },
 
     toggle() {
       this.value = !this.value
 
       if (this.field) {
-        this.emitFieldValueChange(this.field.attribute, this.value)
+        this.emitFieldValueChange(this.fieldAttribute, this.value)
       }
     },
   },

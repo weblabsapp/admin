@@ -1,6 +1,7 @@
 <template>
   <CreateForm
     @resource-created="handleResourceCreated"
+    @resource-created-and-adding-another="handleResourceCreatedAndAddingAnother"
     @create-cancelled="handleCreateCancelled"
     :mode="mode"
     :resource-name="resourceName"
@@ -61,11 +62,22 @@ export default {
       return this.$emit('refresh', { redirect, id })
     },
 
+    handleResourceCreatedAndAddingAnother() {
+      this.disableNavigateBackUsingHistory()
+    },
+
     handleCreateCancelled() {
       if (this.mode == 'form') {
         this.handleProceedingToPreviousPage()
         this.allowLeavingForm()
-        return window.history.back()
+
+        this.proceedToPreviousPage(
+          this.isRelation
+            ? `/resources/${this.viaResource}/${this.viaResourceId}`
+            : `/resources/${this.resourceName}`
+        )
+
+        return
       }
 
       this.allowLeavingModal()
@@ -77,6 +89,12 @@ export default {
      */
     onUpdateFormStatus() {
       this.mode == 'form' ? this.updateFormStatus() : this.updateModalStatus()
+    },
+  },
+
+  computed: {
+    isRelation() {
+      return Boolean(this.viaResourceId && this.viaRelationship)
     },
   },
 }

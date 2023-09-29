@@ -3,19 +3,19 @@
     v-bind="$attrs"
     :data-testid="dataTestid"
     :dusk="dataTestid"
-    :class="{ 'opacity-75': disabled }"
+    ref="searchInputContainer"
   >
     <div class="relative">
       <div
         ref="input"
-        @click="open"
+        @click.stop="open"
         @focus="open"
         @keydown.down.prevent="open"
         @keydown.up.prevent="open"
         :class="{
-          'ring dark:ring-gray-700': show,
+          'ring dark:border-gray-500 dark:ring-gray-700': show,
           'form-input-border-error': error,
-          disabled,
+          'bg-gray-50 dark:bg-gray-700': disabled || readOnly,
         }"
         class="relative flex items-center form-control form-input-bordered form-select pr-6"
         :tabindex="show ? -1 : 0"
@@ -39,8 +39,8 @@
         @click.stop="clear"
         v-if="!shouldShowDropdownArrow && !disabled"
         tabindex="-1"
-        class="absolute p-2 inline-block"
-        style="right: 4px; top: 6px"
+        class="absolute p-2 inline-block right-[4px]"
+        style="top: 6px"
         :dusk="`${dataTestid}-clear-button`"
       >
         <svg
@@ -63,7 +63,7 @@
     >
       <!-- Search Input -->
       <input
-        :disabled="disabled"
+        :disabled="disabled || readOnly"
         v-model="search"
         ref="search"
         @keydown.enter.prevent="chooseSelected"
@@ -89,7 +89,7 @@
           :dusk="`${dataTestid}-result-${index}`"
           :key="getTrackedByKey(option)"
           :ref="index === selected ? 'selected' : null"
-          @click="choose(option)"
+          @click.stop="choose(option)"
           class="px-3 py-1.5 cursor-pointer"
           :class="{
             'border-t border-gray-100 dark:border-gray-700': index != 0,
@@ -104,11 +104,7 @@
     </div>
 
     <teleport to="body">
-      <div
-        @click="show = !show"
-        v-show="show"
-        class="absolute inset-0 z-[35]"
-      />
+      <Backdrop @click="show = !show" :show="show" class="z-[35]" />
     </teleport>
   </div>
 </template>
@@ -118,15 +114,23 @@ import debounce from 'lodash/debounce'
 import findIndex from 'lodash/findIndex'
 import get from 'lodash/get'
 import { createPopper } from '@popperjs/core'
+import { mapProps } from '@/mixins'
 
 export default {
-  emits: ['clear', 'input', 'selected'],
+  emits: ['clear', 'input', 'shown', 'closed', 'selected'],
 
   inheritAttrs: false,
 
   props: {
     dataTestid: {},
-    disabled: { default: false },
+    disabled: {
+      type: Boolean,
+      default: false,
+    },
+    readOnly: {
+      type: Boolean,
+      default: false,
+    },
     value: {},
     data: {},
     trackBy: {},
@@ -143,6 +147,7 @@ export default {
       type: Boolean,
       default: true,
     },
+    ...mapProps(['mode']),
   },
 
   data: () => ({
@@ -201,10 +206,18 @@ export default {
 
   mounted() {
     document.addEventListener('keydown', this.handleEscape)
+
+    if (['modal', 'action-modal'].includes(this.mode)) {
+      document.addEventListener('click', this.handleOutsideClick)
+    }
   },
 
   beforeUnmount() {
     document.removeEventListener('keydown', this.handleEscape)
+
+    if (['modal', 'action-modal'].includes(this.mode)) {
+      document.removeEventListener('click', this.handleOutsideClick)
+    }
   },
 
   methods: {
@@ -220,14 +233,16 @@ export default {
     },
 
     open() {
-      if (!this.disabled) {
+      if (!this.disabled && !this.readOnly) {
         this.show = true
         this.search = ''
+        this.$emit('shown')
       }
     },
 
     close() {
       this.show = false
+      this.$emit('closed')
     },
 
     clear() {
@@ -248,7 +263,7 @@ export default {
 
     updateScrollPosition() {
       this.$nextTick(() => {
-        if (this.$refs.selected) {
+        if (this.$refs.selected && this.$refs.selected[0]) {
           if (
             this.$refs.selected[0].offsetTop >
             this.$refs.container.scrollTop +
@@ -288,6 +303,21 @@ export default {
       this.$emit('selected', option)
       this.$refs.input.focus()
       this.$nextTick(() => this.close())
+    },
+
+    /**
+     * Handle closing the dropdown.
+     */
+    handleOutsideClick(e) {
+      if (
+        !(
+          this.$refs.searchInputContainer &&
+          (this.$refs.searchInputContainer == e.target ||
+            this.$refs.searchInputContainer.contains(e.target))
+        )
+      ) {
+        this.close()
+      }
     },
   },
 

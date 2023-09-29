@@ -1,6 +1,9 @@
 <template>
   <Dropdown v-if="themeSwitcherEnabled" placement="bottom-end">
-    <DropdownTrigger :show-arrow="false" class="h-10 w-10 hover:opacity-50">
+    <DropdownTrigger
+      :show-arrow="false"
+      class="h-10 w-10 hover:text-primary-500"
+    >
       <Icon :type="themeIcon" :class="themeColor" />
     </DropdownTrigger>
     <template #menu>

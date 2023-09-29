@@ -15,8 +15,7 @@ class CheckLicenseCommand extends Command
      */
     protected $name = 'nova:check-license';
 
-    /**
-     * The console command description.
+    /** * The console command description.
      *
      * @var string
      */
@@ -25,7 +24,7 @@ class CheckLicenseCommand extends Command
     /**
      * Execute the console command.
      *
-     * @return bool|null
+     * @return int
      */
     public function handle()
     {
@@ -36,11 +35,11 @@ class CheckLicenseCommand extends Command
         if ($response->status() == 204) {
             $this->info('Your license key is valid and correctly configured! Thank you for being a Nova customer. 🚀');
 
-            return true;
+            return 0;
         }
 
         $this->error($response->json('message'));
 
-        return false;
+        return 1;
     }
 }

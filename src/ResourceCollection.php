@@ -17,7 +17,7 @@ class ResourceCollection extends Collection
      * Return the authorized resources of the collection.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @return static
+     * @return static<TKey, TValue>
      */
     public function authorized(Request $request)
     {
@@ -30,7 +30,7 @@ class ResourceCollection extends Collection
      * Return the resources available to be displayed in the navigation.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @return static
+     * @return static<TKey, TValue>
      */
     public function availableForNavigation(Request $request)
     {
@@ -42,7 +42,7 @@ class ResourceCollection extends Collection
     /**
      * Return the searchable resources for the collection.
      *
-     * @return static
+     * @return static<TKey, TValue>
      */
     public function searchable()
     {
@@ -54,12 +54,12 @@ class ResourceCollection extends Collection
     /**
      * Sort the resources by their group property.
      *
-     * @return \Illuminate\Support\Collection<string, \Illuminate\Support\Collection<array-key, TValue>>
+     * @return \Illuminate\Support\Collection<string, \Laravel\Nova\ResourceCollection<array-key, TValue>>
      */
     public function grouped()
     {
         return $this->groupBy(function ($resource, $key) {
-            return $resource::group();
+            return (string) $resource::group();
         })->toBase()->sortKeys();
     }
 
@@ -67,7 +67,7 @@ class ResourceCollection extends Collection
      * Group the resources for display in navigation.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Support\Collection<string, \Illuminate\Support\Collection<array-key, TValue>>
+     * @return \Illuminate\Support\Collection<string, \Laravel\Nova\ResourceCollection<array-key, TValue>>
      */
     public function groupedForNavigation(Request $request)
     {

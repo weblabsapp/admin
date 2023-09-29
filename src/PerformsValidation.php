@@ -6,6 +6,9 @@ use Illuminate\Support\Facades\Validator;
 use Laravel\Nova\Contracts\PivotableField;
 use Laravel\Nova\Http\Requests\NovaRequest;
 
+/**
+ * @phpstan-import-type TFieldValidationRules from \Laravel\Nova\Fields\Field
+ */
 trait PerformsValidation
 {
     /**
@@ -31,7 +34,7 @@ trait PerformsValidation
      */
     public static function validatorForCreation(NovaRequest $request)
     {
-        return Validator::make($request->all(), static::rulesForCreation($request))
+        return Validator::make(static::dataForCreation($request), static::rulesForCreation($request))
                 ->after(function ($validator) use ($request) {
                     static::afterValidation($request, $validator);
                     static::afterCreationValidation($request, $validator);
@@ -39,19 +42,37 @@ trait PerformsValidation
     }
 
     /**
+     * Provide the data used to validate the resource creation request.
+     *
+     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
+     * @return array
+     */
+    public static function dataForCreation(NovaRequest $request)
+    {
+        return array_merge($request->all(), self::newResource()->creationFields($request)
+            ->applyDependsOn($request)
+            ->withoutReadonly($request)
+            ->withoutUnfillable()
+            ->filter()
+            ->all()
+        );
+    }
+
+    /**
      * Get the validation rules for a resource creation request.
      *
      * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
-     * @return array<int, string|\Illuminate\Validation\Rule|\Illuminate\Contracts\Validation\Rule|callable>
+     * @return array<array-key, mixed>
+     *
+     * @phpstan-return array<array-key, TFieldValidationRules>
      */
     public static function rulesForCreation(NovaRequest $request)
     {
-        return static::formatRules($request, (self::newResource())
+        return static::formatRules($request, self::newResource()
                     ->creationFields($request)
-                    ->reject(function ($field) use ($request) {
-                        return $field->isReadonly($request);
-                    })
                     ->applyDependsOn($request)
+                    ->withoutReadonly($request)
+                    ->withoutUnfillable()
                     ->mapWithKeys(function ($field) use ($request) {
                         return $field->getCreationRules($request);
                     })->all());
@@ -62,7 +83,9 @@ trait PerformsValidation
      *
      * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
      * @param  string  $field
-     * @return array<int, string|\Illuminate\Validation\Rule|\Illuminate\Contracts\Validation\Rule|callable>
+     * @return array<array-key, mixed>
+     *
+     * @phpstan-return array<array-key, TFieldValidationRules>
      */
     public static function creationRulesFor(NovaRequest $request, $field)
     {
@@ -70,6 +93,7 @@ trait PerformsValidation
             ->availableFields($request)
             ->where('attribute', $field)
             ->applyDependsOn($request)
+            ->withoutUnfillable()
             ->mapWithKeys(function ($field) use ($request) {
                 return $field->getCreationRules($request);
             })->all());
@@ -100,7 +124,7 @@ trait PerformsValidation
      */
     public static function validatorForUpdate(NovaRequest $request, $resource = null)
     {
-        return Validator::make($request->all(), static::rulesForUpdate($request, $resource))
+        return Validator::make(static::dataForUpdate($request, $resource), static::rulesForUpdate($request, $resource))
                 ->after(function ($validator) use ($request) {
                     static::afterValidation($request, $validator);
                     static::afterUpdateValidation($request, $validator);
@@ -108,21 +132,40 @@ trait PerformsValidation
     }
 
     /**
+     * Provide the data used to validate the resource update request.
+     *
+     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
+     * @param  \Laravel\Nova\Resource  $resource
+     * @return array
+     */
+    public static function dataForUpdate(NovaRequest $request, $resource)
+    {
+        return array_merge($request->all(), $resource->updateFields($request)
+            ->applyDependsOn($request)
+            ->withoutReadonly($request)
+            ->withoutUnfillable()
+            ->filter()
+            ->all()
+        );
+    }
+
+    /**
      * Get the validation rules for a resource update request.
      *
      * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
      * @param  \Laravel\Nova\Resource|null  $resource
-     * @return array<int, string|\Illuminate\Validation\Rule|\Illuminate\Contracts\Validation\Rule|callable>
+     * @return array<array-key, mixed>
+     *
+     * @phpstan-return array<array-key, TFieldValidationRules>
      */
     public static function rulesForUpdate(NovaRequest $request, $resource = null)
     {
         $resource = $resource ?? self::newResource();
 
         return static::formatRules($request, $resource->updateFields($request)
-                    ->reject(function ($field) use ($request) {
-                        return $field->isReadonly($request);
-                    })
                     ->applyDependsOn($request)
+                    ->withoutReadonly($request)
+                    ->withoutUnfillable()
                     ->mapWithKeys(function ($field) use ($request) {
                         return $field->getUpdateRules($request);
                     })->all());
@@ -133,7 +176,9 @@ trait PerformsValidation
      *
      * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
      * @param  string  $field
-     * @return array<int, string|\Illuminate\Validation\Rule|\Illuminate\Contracts\Validation\Rule|callable>
+     * @return array<array-key, mixed>
+     *
+     * @phpstan-return array<array-key, TFieldValidationRules>
      */
     public static function updateRulesFor(NovaRequest $request, $field)
     {
@@ -141,6 +186,7 @@ trait PerformsValidation
                     ->availableFields($request)
                     ->where('attribute', $field)
                     ->applyDependsOn($request)
+                    ->withoutUnfillable()
                     ->mapWithKeys(function ($field) use ($request) {
                         return $field->getUpdateRules($request);
                     })->all());
@@ -174,7 +220,9 @@ trait PerformsValidation
      * Get the validation rules for a resource attachment request.
      *
      * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
-     * @return array<int, string|\Illuminate\Validation\Rule|\Illuminate\Contracts\Validation\Rule|callable>
+     * @return array<array-key, mixed>
+     *
+     * @phpstan-return array<array-key, TFieldValidationRules>
      */
     public static function rulesForAttachment(NovaRequest $request)
     {
@@ -213,7 +261,9 @@ trait PerformsValidation
      * Get the validation rules for a resource attachment update request.
      *
      * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
-     * @return array<int, string|\Illuminate\Validation\Rule|\Illuminate\Contracts\Validation\Rule|callable>
+     * @return array<array-key, mixed>
+     *
+     * @phpstan-return array<array-key, TFieldValidationRules>
      */
     public static function rulesForAttachmentUpdate(NovaRequest $request)
     {
@@ -229,7 +279,9 @@ trait PerformsValidation
      *
      * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
      * @param  array  $rules
-     * @return array<int, string|\Illuminate\Validation\Rule|\Illuminate\Contracts\Validation\Rule|callable>
+     * @return array<array-key, mixed>
+     *
+     * @phpstan-return array<array-key, TFieldValidationRules>
      */
     protected static function formatRules(NovaRequest $request, array $rules)
     {

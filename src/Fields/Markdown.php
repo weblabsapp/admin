@@ -3,14 +3,25 @@
 namespace Laravel\Nova\Fields;
 
 use Illuminate\Support\Arr;
+use Laravel\Nova\Contracts\Deletable as DeletableContract;
 use Laravel\Nova\Contracts\FilterableField;
+use Laravel\Nova\Contracts\Previewable;
+use Laravel\Nova\Contracts\Storable as StorableContract;
 use Laravel\Nova\Fields\Filters\TextFilter;
+use Laravel\Nova\Fields\Markdown\CommonMarkPreset;
+use Laravel\Nova\Fields\Markdown\DefaultPreset;
+use Laravel\Nova\Fields\Markdown\ZeroPreset;
 use Laravel\Nova\Http\Requests\NovaRequest;
+use Laravel\Nova\ManagesPresets;
 
-class Markdown extends Field implements FilterableField
+class Markdown extends Field implements DeletableContract, FilterableField, Previewable, StorableContract
 {
-    use Expandable,
-        FieldFilterable;
+    use Expandable;
+    use FieldFilterable;
+    use HasAttachments;
+    use Storable;
+    use SupportsDependentFields;
+    use ManagesPresets;
 
     /**
      * The field's component.
@@ -27,23 +38,38 @@ class Markdown extends Field implements FilterableField
     public $showOnIndex = false;
 
     /**
-     * Indicates the preset the field should use.
+     * The built-in presets for the Markdown field.
      *
-     * @var string|array<string, mixed>
+     * @var string[]
      */
-    public $preset = 'default';
+    public $presets = [
+        'default' => DefaultPreset::class,
+        'commonmark' => CommonMarkPreset::class,
+        'zero' => ZeroPreset::class,
+    ];
 
     /**
-     * Define the preset the field should use. Can be "commonmark", "zero", and "default".
+     * Hydrate the given attribute on the model based on the incoming request.
      *
-     * @param  string|array<string, mixed>  $preset
-     * @return $this
+     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
+     * @param  string  $requestAttribute
+     * @param  \Illuminate\Database\Eloquent\Model|\Laravel\Nova\Support\Fluent  $model
+     * @param  string  $attribute
+     * @return void|\Closure
      */
-    public function preset($preset)
+    protected function fillAttribute(NovaRequest $request, $requestAttribute, $model, $attribute)
     {
-        $this->preset = $preset;
+        return $this->fillAttributeWithAttachment($request, $requestAttribute, $model, $attribute);
+    }
 
-        return $this;
+    /**
+     * Get the full path that the field is stored at on disk.
+     *
+     * @return string|null
+     */
+    public function getStoragePath()
+    {
+        return null;
     }
 
     /**
@@ -74,6 +100,25 @@ class Markdown extends Field implements FilterableField
     }
 
     /**
+     * Return a preview for the given field value.
+     *
+     * @param  string|null  $value
+     * @return string
+     */
+    public function previewFor($value)
+    {
+        return $this->renderer()->convert($value ?? '');
+    }
+
+    /**
+     * @return \Laravel\Nova\Fields\Markdown\MarkdownPreset
+     */
+    public function renderer()
+    {
+        return new $this->presets[$this->preset];
+    }
+
+    /**
      * Prepare the element for JSON serialization.
      *
      * @return array<string, mixed>
@@ -83,6 +128,8 @@ class Markdown extends Field implements FilterableField
         return array_merge(parent::jsonSerialize(), [
             'shouldShow' => $this->shouldBeExpanded(),
             'preset' => $this->preset,
+            'previewFor' => $this->previewFor($this->value ?? ''),
+            'withFiles' => $this->withFiles,
         ]);
     }
 }

@@ -1,5 +1,10 @@
 <template>
-  <Dropdown v-if="hasUserMenu" class="flex items-center" placement="bottom-end">
+  <component
+    :is="componentName"
+    v-if="hasUserMenu"
+    class="flex items-center"
+    :placement="dropdownPlacement"
+  >
     <DropdownTrigger
       class="hover:bg-gray-100 dark:hover:bg-gray-700 h-10 focus:outline-none focus:ring rounded-lg flex items-center text-sm font-semibold text-gray-600 dark:text-gray-400 px-3"
       role="navigation"
@@ -32,6 +37,12 @@
             v-bind="item.props"
             v-on="item.on"
           >
+            <span v-if="item.badge" class="mr-1">
+              <Badge :extra-classes="item.badge.typeClass">
+                {{ item.badge.value }}
+              </Badge>
+            </span>
+
             {{ item.name }}
           </component>
 
@@ -53,16 +64,10 @@
         </nav>
       </DropdownMenu>
     </template>
-  </Dropdown>
+  </component>
   <div v-else-if="currentUser" class="flex items-center">
-    <Icon
-      type="finger-print"
-      :solid="true"
-      v-if="currentUser.impersonating"
-      class="w-8 h-8 mr-3"
-    />
     <img
-      v-else-if="currentUser.avatar"
+      v-if="currentUser.avatar"
       :alt="__(':name\'s Avatar', { name: userName })"
       :src="currentUser.avatar"
       class="rounded-full w-8 h-8 mr-3"
@@ -77,10 +82,16 @@
 <script>
 import { Inertia } from '@inertiajs/inertia'
 import identity from 'lodash/identity'
+import isNull from 'lodash/isNull'
+import omitBy from 'lodash/omitBy'
 import pickBy from 'lodash/pickBy'
 import { mapActions, mapGetters } from 'vuex'
 
 export default {
+  props: {
+    mobile: { type: Boolean, default: false },
+  },
+
   methods: {
     ...mapActions(['logout', 'stopImpersonating']),
 
@@ -120,35 +131,40 @@ export default {
     formattedItems() {
       return this.userMenu.map(i => {
         let method = i.method || 'GET'
-        let props = {
-          href: i.path,
-        }
+        let props = { href: i.path }
 
         if (i.external && method == 'GET') {
           return {
             component: 'DropdownMenuItem',
-            props,
-            external: i.external,
+            props: {
+              ...props,
+              target: i.target || null,
+            },
             name: i.name,
+            external: i.external,
+            on: {},
           }
         }
 
         return {
           component: 'DropdownMenuItem',
           props: pickBy(
-            {
-              ...props,
-              method,
-              data: i.data || {},
-              headers: i.headers || {},
-              as: method !== 'GET' ? 'button' : null,
-              type: method !== 'GET' ? 'button' : null,
-            },
+            omitBy(
+              {
+                ...props,
+                method: method !== 'GET' ? method : null,
+                data: i.data || null,
+                headers: i.headers || null,
+                as: method === 'GET' ? 'link' : 'form-button',
+              },
+              isNull
+            ),
             identity
           ),
           external: i.external,
           name: i.name,
           on: {},
+          badge: i.badge,
         }
       })
     },
@@ -156,7 +172,9 @@ export default {
     hasUserMenu() {
       return (
         this.currentUser &&
-        (this.formattedItems.length > 0 || this.supportsAuthentication)
+        (this.formattedItems.length > 0 ||
+          this.supportsAuthentication ||
+          this.currentUser.impersonating)
       )
     },
 
@@ -169,6 +187,14 @@ export default {
 
     customLogoutPath() {
       return Nova.config('customLogoutPath')
+    },
+
+    componentName() {
+      return this.mobile === true ? 'MainMenuDropdown' : 'Dropdown'
+    },
+
+    dropdownPlacement() {
+      return this.mobile === true ? 'top-start' : 'bottom-end'
     },
   },
 }

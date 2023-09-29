@@ -6,6 +6,7 @@ use Illuminate\Support\Arr;
 use Laravel\Nova\Contracts\FilterableField;
 use Laravel\Nova\Fields\Filters\BooleanGroupFilter;
 use Laravel\Nova\Http\Requests\NovaRequest;
+use Laravel\Nova\Nova;
 
 class BooleanGroup extends Field implements FilterableField
 {
@@ -120,7 +121,7 @@ class BooleanGroup extends Field implements FilterableField
      *
      * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
      * @param  string  $requestAttribute
-     * @param  object  $model
+     * @param  \Illuminate\Database\Eloquent\Model|\Laravel\Nova\Support\Fluent  $model
      * @param  string  $attribute
      * @return void
      */
@@ -190,7 +191,7 @@ class BooleanGroup extends Field implements FilterableField
             'hideTrueValues' => $this->hideTrueValues,
             'hideFalseValues' => $this->hideFalseValues,
             'options' => $this->options,
-            'noValueText' => __($this->noValueText),
+            'noValueText' => Nova::__($this->noValueText),
         ]);
     }
 }

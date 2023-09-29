@@ -14,7 +14,10 @@
   >
     <span class="sr-only">{{ __('Filter Dropdown') }}</span>
     <DropdownTrigger
-      :class="{ 'text-white dark:text-gray-800': filtersAreApplied }"
+      :class="{
+        'text-white hover:text-white dark:text-gray-800 dark:hover:text-gray-800':
+          filtersAreApplied,
+      }"
       class="toolbar-button px-2"
     >
       <Icon type="filter" />

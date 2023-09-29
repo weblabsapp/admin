@@ -19,8 +19,8 @@ export default {
   props: {
     as: {
       type: String,
-      default: 'link',
-      validator: v => ['button', 'link'].includes(v),
+      default: 'external',
+      validator: v => ['button', 'external', 'form-button', 'link'].includes(v),
     },
 
     destructive: {
@@ -33,7 +33,9 @@ export default {
     component() {
       return {
         button: 'button',
-        link: 'a',
+        external: 'a',
+        link: 'Link',
+        'form-button': 'FormButton',
       }[this.as]
     },
   },

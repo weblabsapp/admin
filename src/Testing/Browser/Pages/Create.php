@@ -10,8 +10,6 @@ class Create extends Page
 
     public $resourceName;
 
-    public $queryParams;
-
     /**
      * Create a new page instance.
      *
@@ -28,20 +26,6 @@ class Create extends Page
     }
 
     /**
-     * Get the URL for the page.
-     *
-     * @return string
-     */
-    public function url()
-    {
-        if ($this->queryParams) {
-            return $this->novaPageUrl.'?'.http_build_query($this->queryParams);
-        }
-
-        return $this->novaPageUrl;
-    }
-
-    /**
      * Click the create button.
      *
      * @param  \Laravel\Dusk\Browser  $browser
@@ -49,7 +33,9 @@ class Create extends Page
      */
     public function create(Browser $browser)
     {
-        $browser->click('@create-button')->pause(500);
+        $browser->dismissToasted()
+            ->click('@create-button')
+            ->pause(500);
     }
 
     /**
@@ -60,7 +46,21 @@ class Create extends Page
      */
     public function createAndAddAnother(Browser $browser)
     {
-        $browser->click('@create-and-add-another-button')->pause(500);
+        $browser->dismissToasted()
+            ->click('@create-and-add-another-button')
+            ->pause(500);
+    }
+
+    /**
+     * Click the cancel button.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @return void
+     */
+    public function cancel(Browser $browser)
+    {
+        $browser->dismissToasted()
+            ->click('@cancel-create-button');
     }
 
     /**

@@ -18,17 +18,18 @@ class NotificationResource extends JsonResource
     public function toArray($request)
     {
         return [
-            'id' => $this->getKey(),
-            'component' => data_get($this->data, 'component'),
-            'message' => data_get($this->data, 'message'),
-            'actionText' => data_get($this->data, 'actionText'),
-            'actionUrl' => data_get($this->data, 'actionUrl'),
-            'icon' => data_get($this->data, 'icon'),
-            'type' => data_get($this->data, 'type'),
-            'iconClass' => data_get($this->data, 'iconClass'),
-            'created_at_friendly' => $this->created_at->diffForHumans(),
-            'created_at' => $this->created_at->toIso8601String(),
-            'read_at' => $this->read_at,
+            'id' => $this->resource->getKey(),
+            'user_id' => $this->resource->notifiable_id,
+            'component' => data_get($this->resource->data, 'component'),
+            'message' => data_get($this->resource->data, 'message'),
+            'actionText' => data_get($this->resource->data, 'actionText'),
+            'actionUrl' => data_get($this->resource->data, 'actionUrl'),
+            'icon' => data_get($this->resource->data, 'icon'),
+            'type' => data_get($this->resource->data, 'type'),
+            'iconClass' => data_get($this->resource->data, 'iconClass'),
+            'created_at_friendly' => $this->resource->created_at->diffForHumans(),
+            'created_at' => $this->resource->created_at->toIso8601String(),
+            'read_at' => $this->resource->read_at,
         ];
     }
 }

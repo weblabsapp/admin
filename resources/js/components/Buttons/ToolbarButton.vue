@@ -1,7 +1,7 @@
 <template>
   <button
     type="button"
-    class="inline-flex items-center justify-center w-8 h-8 focus:outline-none focus:ring rounded-lg"
+    class="inline-flex items-center justify-center w-8 h-8 focus:outline-none focus:ring ring-primary-200 dark:ring-gray-600 rounded-lg"
   >
     <slot />
     <Icon v-if="type" solid :type="type" />

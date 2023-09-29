@@ -1,12 +1,14 @@
+import debounce from 'lodash/debounce'
 import find from 'lodash/find'
 import includes from 'lodash/includes'
 import map from 'lodash/map'
-import { Filterable, HasActions, RouteParameters, mapProps } from './index'
+import { Filterable, RouteParameters, mapProps } from './index'
 import { capitalize } from '@/util'
 import { computed } from 'vue'
+import filter from 'lodash/filter'
 
 export default {
-  mixins: [Filterable, HasActions, RouteParameters],
+  mixins: [Filterable, RouteParameters],
 
   props: {
     ...mapProps([
@@ -18,28 +20,41 @@ export default {
       'disablePagination',
     ]),
 
-    field: {
-      type: Object,
-    },
-
-    initialPerPage: {
-      type: Number,
-      required: false,
-    },
+    field: { type: Object },
+    initialPerPage: { type: Number, required: false },
   },
 
   provide() {
     return {
+      authorizedToViewAnyResources: computed(
+        () => this.authorizedToViewAnyResources
+      ),
+      authorizedToUpdateAnyResources: computed(
+        () => this.authorizedToUpdateAnyResources
+      ),
+      authorizedToDeleteAnyResources: computed(
+        () => this.authorizedToDeleteAnyResources
+      ),
+      authorizedToRestoreAnyResources: computed(
+        () => this.authorizedToRestoreAnyResources
+      ),
+      selectedResourcesCount: computed(() => this.selectedResources.length),
       selectAllChecked: computed(() => this.selectAllChecked),
       selectAllMatchingChecked: computed(() => this.selectAllMatchingChecked),
+      selectAllOrSelectAllMatchingChecked: computed(
+        () => this.selectAllOrSelectAllMatchingChecked
+      ),
       selectAllAndSelectAllMatchingChecked: computed(
         () => this.selectAllAndSelectAllMatchingChecked
       ),
       selectAllIndeterminate: computed(() => this.selectAllIndeterminate),
+      orderByParameter: computed(() => this.orderByParameter),
+      orderByDirectionParameter: computed(() => this.orderByDirectionParameter),
     }
   },
 
   data: () => ({
+    actions: [],
     allMatchingResourceCount: 0,
     authorizedToRelate: false,
     canceller: null,
@@ -49,9 +64,12 @@ export default {
     loading: true,
     orderBy: '',
     orderByDirection: '',
+    pivotActions: null,
+    resourceHasActions: false,
     resourceResponse: null,
     resourceResponseError: null,
     resources: [],
+    search: '',
     selectAllMatchingResources: false,
     selectedResources: [],
     softDeletes: false,
@@ -60,6 +78,11 @@ export default {
 
   async created() {
     if (Nova.missingResource(this.resourceName)) return Nova.visit('/404')
+
+    const debouncer = debounce(
+      callback => callback(),
+      this.resourceInformation.debounce
+    )
 
     this.initializeSearchFromQueryString()
     this.initializePerPageFromQueryString()
@@ -101,6 +124,11 @@ export default {
         this.getResources()
       }
     )
+
+    this.$watch('search', newValue => {
+      this.search = newValue
+      debouncer(() => this.performSearch())
+    })
   },
 
   beforeUnmount() {
@@ -147,7 +175,9 @@ export default {
     /**
      * Toggle the selection of all resources
      */
-    toggleSelectAll() {
+    toggleSelectAll(e) {
+      e.preventDefault()
+
       if (this.selectAllChecked) {
         this.clearResourceSelections()
       } else {
@@ -160,7 +190,9 @@ export default {
     /**
      * Toggle the selection of all matching resources in the database
      */
-    toggleSelectAllMatching() {
+    toggleSelectAllMatching(e) {
+      e.preventDefault()
+
       if (!this.selectAllMatchingResources) {
         this.selectAllResources()
         this.selectAllMatchingResources = true
@@ -181,6 +213,8 @@ export default {
         const index = this.selectedResources.indexOf(resource)
         if (index > -1) this.selectedResources.splice(index, 1)
       }
+
+      this.selectAllMatchingResources = false
 
       this.getActions()
     },
@@ -286,11 +320,9 @@ export default {
      * Execute a search against the resource.
      */
     performSearch() {
-      this.debouncer(() => {
-        this.updateQueryString({
-          [this.pageParameter]: 1,
-          [this.searchParameter]: this.search,
-        })
+      this.updateQueryString({
+        [this.pageParameter]: 1,
+        [this.searchParameter]: this.search,
       })
     },
   },
@@ -331,6 +363,10 @@ export default {
 
     selectAllAndSelectAllMatchingChecked() {
       return this.selectAllChecked && this.selectAllMatchingChecked
+    },
+
+    selectAllOrSelectAllMatchingChecked() {
+      return this.selectAllChecked || this.selectAllMatchingChecked
     },
 
     /**
@@ -460,7 +496,7 @@ export default {
       return (
         Boolean(this.hasResources && !this.viaHasOne) &&
         Boolean(
-          this.actionsAreAvailable ||
+          this.resourceHasActions ||
             this.authorizedToDeleteAnyResources ||
             this.canShowDeleteMenu
         )
@@ -494,6 +530,26 @@ export default {
           this.selectedResources,
           resource => resource.authorizedToForceDelete
         )
+      )
+    },
+
+    /**
+     * Determine if the user is authorized to view any listed resource.
+     */
+    authorizedToViewAnyResources() {
+      return (
+        this.resources.length > 0 &&
+        Boolean(find(this.resources, resource => resource.authorizedToView))
+      )
+    },
+
+    /**
+     * Determine if the user is authorized to view any listed resource.
+     */
+    authorizedToUpdateAnyResources() {
+      return (
+        this.resources.length > 0 &&
+        Boolean(find(this.resources, resource => resource.authorizedToUpdate))
       )
     },
 
@@ -671,7 +727,7 @@ export default {
       return (
         this.disablePagination !== true &&
         this.resourceResponse &&
-        this.hasResources
+        (this.hasResources || this.hasPreviousPage)
       )
     },
 
@@ -725,6 +781,61 @@ export default {
       return this.viaRelationship
         ? this.viaRelationship + '_per_page'
         : this.resourceName + '_per_page'
+    },
+
+    /**
+     * Determine whether there are any standalone actions.
+     */
+    haveStandaloneActions() {
+      return filter(this.allActions, a => a.standalone === true).length > 0
+    },
+
+    /**
+     * Return the available actions.
+     */
+    availableActions() {
+      return this.actions
+    },
+
+    /**
+     * Determine if the resource has any pivot actions available.
+     */
+    hasPivotActions() {
+      return this.pivotActions && this.pivotActions.actions.length > 0
+    },
+
+    /**
+     * Get the name of the pivot model for the resource.
+     */
+    pivotName() {
+      return this.pivotActions ? this.pivotActions.name : ''
+    },
+
+    /**
+     * Determine if the resource has any actions available.
+     */
+    actionsAreAvailable() {
+      return this.allActions.length > 0
+    },
+
+    /**
+     * Get all of the actions available to the resource.
+     */
+    allActions() {
+      return this.hasPivotActions
+        ? this.actions.concat(this.pivotActions.actions)
+        : this.actions
+    },
+
+    availableStandaloneActions() {
+      return this.allActions.filter(a => a.standalone === true)
+    },
+
+    /**
+     * Get the selected resources for the action selector.
+     */
+    selectedResourcesForActionSelector() {
+      return this.selectAllMatchingChecked ? 'all' : this.selectedResourceIds
     },
   },
 }

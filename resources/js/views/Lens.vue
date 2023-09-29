@@ -16,6 +16,33 @@
       v-text="lensName"
     />
 
+    <div
+      v-if="searchable || availableStandaloneActions.length > 0"
+      class="flex items-center mb-6"
+    >
+      <IndexSearchInput
+        v-if="searchable"
+        :searchable="searchable"
+        v-model:keyword="search"
+        @update:keyword="search = $event"
+      />
+
+      <!-- Action Dropdown -->
+      <ActionDropdown
+        v-if="availableStandaloneActions.length > 0"
+        @actionExecuted="() => fetchPolicies()"
+        class="ml-auto"
+        :resource-name="resourceName"
+        :via-resource="''"
+        :via-resource-id="''"
+        :via-relationship="''"
+        :relationship-type="''"
+        :actions="availableStandaloneActions"
+        :selected-resources="selectedResourcesForActionSelector"
+        :endpoint="lensActionEndpoint"
+      />
+    </div>
+
     <Card>
       <ResourceTableToolbar
         :actions-endpoint="lensActionEndpoint"
@@ -58,8 +85,10 @@
         :resource-name="resourceName"
         :restore-all-matching-resources="restoreAllMatchingResources"
         :restore-selected-resources="restoreSelectedResources"
+        :current-page-count="resources.length"
         :select-all-checked="selectAllChecked"
         :select-all-matching-checked="selectAllMatchingResources"
+        @deselect="clearResourceSelections"
         :selected-resources="selectedResources"
         :selected-resources-for-action-selector="
           selectedResourcesForActionSelector
@@ -158,8 +187,9 @@ import {
   InteractsWithResourceInformation,
   SupportsPolling,
 } from '@/mixins'
-import { CancelToken, Cancel } from 'axios'
+import { CancelToken, isCancel } from 'axios'
 import { minimum } from '@/util'
+import { mapActions } from 'vuex'
 
 export default {
   mixins: [
@@ -178,6 +208,11 @@ export default {
   props: {
     lens: {
       type: String,
+      required: true,
+    },
+
+    searchable: {
+      type: Boolean,
       required: true,
     },
   },
@@ -207,6 +242,8 @@ export default {
   },
 
   methods: {
+    ...mapActions(['fetchPolicies']),
+
     /**
      * Get the resources based on the current page, search, filters, etc.
      */
@@ -241,7 +278,7 @@ export default {
             this.handleResourcesLoaded()
           })
           .catch(e => {
-            if (e instanceof Cancel) {
+            if (isCancel(e)) {
               return
             }
 
@@ -279,9 +316,10 @@ export default {
         .then(response => {
           this.actions = response.data.actions
           this.pivotActions = response.data.pivotActions
+          this.resourceHasActions = response.data.counts.resource > 0
         })
         .catch(e => {
-          if (e instanceof Cancel) {
+          if (isCancel(e)) {
             return
           }
 

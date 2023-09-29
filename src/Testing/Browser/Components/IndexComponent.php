@@ -2,6 +2,7 @@
 
 namespace Laravel\Nova\Testing\Browser\Components;
 
+use Illuminate\Support\Str;
 use Laravel\Dusk\Browser;
 
 class IndexComponent extends Component
@@ -36,7 +37,7 @@ class IndexComponent extends Component
         $selector = '[dusk="'.$this->resourceName.'-index-component"]';
 
         return sprintf(
-           (! is_null($this->viaRelationship) ? '%s[data-relationship="%s"]' : '%s'), $selector, $this->viaRelationship
+            ! is_null($this->viaRelationship) ? '%s[data-relationship="%s"]' : '%s', $selector, $this->viaRelationship
         );
     }
 
@@ -102,7 +103,7 @@ class IndexComponent extends Component
      */
     public function sortBy(Browser $browser, $attribute)
     {
-        $browser->click('@sort-'.$attribute)->waitForTable();
+        $browser->click("@sort-{$attribute}")->waitForTable();
     }
 
     /**
@@ -113,7 +114,7 @@ class IndexComponent extends Component
      */
     public function nextPage(Browser $browser)
     {
-        return $browser->click('@next')->waitForTable();
+        $browser->click('@next')->waitForTable();
     }
 
     /**
@@ -124,7 +125,33 @@ class IndexComponent extends Component
      */
     public function previousPage(Browser $browser)
     {
-        return $browser->click('@previous')->waitForTable();
+        $browser->click('@previous')->waitForTable();
+    }
+
+    /**
+     * Select all the the resources on current page.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @return void
+     */
+    public function selectAllOnCurrentPage(Browser $browser)
+    {
+        $browser->within(new SelectAllDropdownComponent(), function ($browser) {
+            $browser->selectAllOnCurrentPage();
+        });
+    }
+
+    /**
+     * Un-select all the the resources on current page.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @return void
+     */
+    public function unselectAllOnCurrentPage(Browser $browser)
+    {
+        $browser->within(new SelectAllDropdownComponent(), function ($browser) {
+            $browser->unselectAllOnCurrentPage();
+        });
     }
 
     /**
@@ -135,12 +162,36 @@ class IndexComponent extends Component
      */
     public function selectAllMatching(Browser $browser)
     {
-        $browser->click('[dusk="select-all-dropdown"]')
-                        ->elsewhereWhenAvailable('[dusk="select-all-matching-button"]', function ($browser) {
-                            $browser->click('input[type="checkbox"]');
-                        })
-                        ->pause(250)
-                        ->closeCurrentDropdown();
+        $browser->within(new SelectAllDropdownComponent(), function ($browser) {
+            $browser->selectAllMatching();
+        });
+    }
+
+    /**
+     * Un-select all the matching resources.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @return void
+     */
+    public function unselectAllMatching(Browser $browser)
+    {
+        $browser->within(new SelectAllDropdownComponent(), function ($browser) {
+            $browser->unselectAllMatching();
+        });
+    }
+
+    /**
+     * Assert on the matching total matching count text.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @param  int  $count
+     * @return void
+     */
+    public function assertSelectAllMatchingCount(Browser $browser, $count)
+    {
+        $browser->within(new SelectAllDropdownComponent(), function ($browser) use ($count) {
+            $browser->assertSelectAllMatchingCount($count);
+        });
     }
 
     /**
@@ -161,6 +212,38 @@ class IndexComponent extends Component
         }
 
         $browser->closeCurrentDropdown()->pause(1000);
+    }
+
+    /**
+     * Reset current filter value for the index.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @return void
+     */
+    public function resetFilter(Browser $browser)
+    {
+        $this->runFilter($browser, function ($browser) {
+            $browser->press(Str::upper(__('Reset Filters')));
+        });
+    }
+
+    /**
+     * Assert current filter count for the index.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @param  int  $count
+     * @return void
+     */
+    public function assertFilterCount(Browser $browser, int $count)
+    {
+        $browser->within('div[dusk="filter-selector"] button div.toolbar-button', function ($browser) use ($count) {
+            if ($count <= 0) {
+                $browser->assertMissing('span');
+            } else {
+                $browser->assertVisible('span')
+                    ->assertSeeIn('span', $count);
+            }
+        });
     }
 
     /**
@@ -256,6 +339,21 @@ class IndexComponent extends Component
     }
 
     /**
+     * Open the standalone action selector.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @return void
+     *
+     * @throws \Facebook\WebDriver\Exception\TimeOutException
+     */
+    public function openStandaloneActionSelector(Browser $browser)
+    {
+        $browser->whenAvailable('@index-standalone-action-dropdown', function ($browser) {
+            $browser->click('')->pause(100);
+        });
+    }
+
+    /**
      * Open the filter selector.
      *
      * @param  \Laravel\Dusk\Browser  $browser
@@ -282,9 +380,33 @@ class IndexComponent extends Component
     public function openControlSelectorById(Browser $browser, $id)
     {
         $browser->closeCurrentDropdown()
-                ->whenAvailable('@'.$id.'-control-selector', function ($browser) {
-                    $browser->click('')->pause(300);
-                });
+            ->whenAvailable("@{$id}-control-selector", function ($browser) {
+                $browser->click('')->pause(300);
+            });
+    }
+
+    /**
+     * assert the action selector is present by ID.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @param  int|string  $id
+     * @return void
+     */
+    public function assertPresentControlSelectorById(Browser $browser, $id)
+    {
+        $browser->assertPresent("@{$id}-control-selector");
+    }
+
+    /**
+     * assert the action selector is missing by ID.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @param  int|string  $id
+     * @return void
+     */
+    public function assertMissingControlSelectorById(Browser $browser, $id)
+    {
+        $browser->assertMissing("@{$id}-control-selector");
     }
 
     /**
@@ -299,10 +421,36 @@ class IndexComponent extends Component
      */
     public function selectAction(Browser $browser, $uriKey, $fieldCallback)
     {
-        $browser->waitFor('@action-select')
-                    ->select('select[dusk="action-select"]', $uriKey);
+        $browser->whenAvailable('select[dusk="action-select"]', function ($browser) use ($uriKey) {
+            $browser->select('', $uriKey)
+                ->pause(100)
+                ->assertSelected('', '');
+        });
 
-        $browser->elsewhereWhenAvailable('.modal[data-modal-open=true]', function ($browser) use ($fieldCallback) {
+        $browser->elsewhereWhenAvailable(new Modals\ConfirmActionModalComponent(), function ($browser) use ($fieldCallback) {
+            $fieldCallback($browser);
+        });
+    }
+
+    /**
+     * Select the standalone action with the given URI key.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @param  string  $uriKey
+     * @param  callable  $fieldCallback
+     * @return void
+     *
+     * @throws \Facebook\WebDriver\Exception\TimeOutException
+     */
+    public function selectStandaloneAction(Browser $browser, $uriKey, $fieldCallback)
+    {
+        $browser->whenAvailable('@index-standalone-action-dropdown', function ($browser) {
+            $browser->click('');
+        })->elseWhereWhenAvailable('div[data-menu-open="true"]', function ($browser) use ($uriKey) {
+            $browser->click("button[data-action-id='{$uriKey}']");
+        });
+
+        $browser->elsewhereWhenAvailable(new Modals\ConfirmActionModalComponent(), function ($browser) use ($fieldCallback) {
             $fieldCallback($browser);
         });
     }
@@ -329,6 +477,27 @@ class IndexComponent extends Component
     }
 
     /**
+     * Run the standalone action with the given URI key.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @param  string  $uriKey
+     * @param  callable|null  $fieldCallback
+     * @return void
+     *
+     * @throws \Facebook\WebDriver\Exception\TimeOutException
+     */
+    public function runStandaloneAction(Browser $browser, $uriKey, $fieldCallback = null)
+    {
+        $this->selectStandaloneAction($browser, $uriKey, function ($browser) use ($fieldCallback) {
+            if ($fieldCallback) {
+                $fieldCallback($browser);
+            }
+
+            $browser->waitForText('Run Action')->click('[dusk="confirm-action-button"]')->pause(250);
+        });
+    }
+
+    /**
      * Select the action with the given URI key.
      *
      * @param  \Laravel\Dusk\Browser  $browser
@@ -340,11 +509,11 @@ class IndexComponent extends Component
     public function selectInlineAction(Browser $browser, $id, $uriKey, $fieldCallback)
     {
         $browser->openControlSelectorById($id)
-            ->elsewhereWhenAvailable("@{$id}-inline-action-{$uriKey}", function ($browser) {
-                $browser->click('');
+            ->elseWhereWhenAvailable('div[data-menu-open="true"]', function ($browser) use ($uriKey) {
+                $browser->click("button[data-action-id='{$uriKey}']");
             })->pause(500);
 
-        $browser->elsewhereWhenAvailable('.modal[data-modal-open=true]', function ($browser) use ($fieldCallback) {
+        $browser->elsewhereWhenAvailable(new Modals\ConfirmActionModalComponent(), function ($browser) use ($fieldCallback) {
             $fieldCallback($browser);
         });
     }
@@ -378,8 +547,7 @@ class IndexComponent extends Component
      */
     public function clickCheckboxForId(Browser $browser, $id)
     {
-        $browser->click('[dusk="'.$id.'-row"] input.checkbox')
-                        ->pause(175);
+        $browser->click('[dusk="'.$id.'-row"] input.checkbox')->pause(175);
     }
 
     /**
@@ -392,9 +560,9 @@ class IndexComponent extends Component
     public function replicateResourceById(Browser $browser, $id)
     {
         $browser->openControlSelectorById($id)
-                        ->elsewhereWhenAvailable('@'.$id.'-replicate-button', function ($browser) {
-                            $browser->click('');
-                        })->pause(500);
+            ->elsewhereWhenAvailable("@{$id}-replicate-button", function ($browser) {
+                $browser->click('');
+            })->pause(500);
     }
 
     /**
@@ -407,9 +575,9 @@ class IndexComponent extends Component
     public function previewResourceById(Browser $browser, $id)
     {
         $browser->openControlSelectorById($id)
-                        ->elsewhereWhenAvailable("@{$id}-preview-button", function ($browser) {
-                            $browser->click('');
-                        })->pause(500);
+            ->elsewhereWhenAvailable("@{$id}-preview-button", function ($browser) {
+                $browser->click('');
+            })->pause(500);
     }
 
     /**
@@ -421,10 +589,10 @@ class IndexComponent extends Component
      */
     public function deleteResourceById(Browser $browser, $id)
     {
-        $browser->click('@'.$id.'-delete-button')
-                        ->elsewhereWhenAvailable('.modal[data-modal-open=true]', function ($browser) {
-                            $browser->click('@confirm-delete-button');
-                        })->pause(500);
+        $browser->click("@{$id}-delete-button")
+            ->elsewhereWhenAvailable(new Modals\DeleteResourceModalComponent(), function ($browser) {
+                $browser->confirm();
+            })->pause(500);
     }
 
     /**
@@ -436,10 +604,34 @@ class IndexComponent extends Component
      */
     public function restoreResourceById(Browser $browser, $id)
     {
-        $browser->click('@'.$id.'-restore-button')
-                        ->elsewhereWhenAvailable('.modal[data-modal-open=true]', function ($browser) {
-                            $browser->click('@confirm-restore-button');
-                        })->pause(500);
+        $browser->click("@{$id}-restore-button")
+            ->elsewhereWhenAvailable(new Modals\RestoreResourceModalComponent(), function ($browser) {
+                $browser->confirm();
+            })->pause(500);
+    }
+
+    /**
+     * View the user at the given resource table row index.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @param  int|string  $id
+     * @return void
+     */
+    public function viewResourceById(Browser $browser, $id)
+    {
+        $browser->click("@{$id}-view-button")->pause(500);
+    }
+
+    /**
+     * Edit the user at the given resource table row index.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @param  int|string  $id
+     * @return void
+     */
+    public function editResourceById(Browser $browser, $id)
+    {
+        $browser->click("@{$id}-edit-button")->pause(500);
     }
 
     /**
@@ -451,13 +643,13 @@ class IndexComponent extends Component
     public function deleteSelected(Browser $browser)
     {
         $browser->click('@delete-menu')
-                    ->pause(300)
-                    ->elsewhere('', function ($browser) {
-                        $browser->click('[dusk="delete-selected-button"]')
-                            ->whenAvailable('.modal[data-modal-open=true]', function ($browser) {
-                                $browser->click('@confirm-delete-button');
-                            });
-                    })->pause(1000);
+            ->pause(300)
+            ->elsewhere('', function ($browser) {
+                $browser->click('[dusk="delete-selected-button"]')
+                    ->elsewhereWhenAvailable(new Modals\DeleteResourceModalComponent(), function ($browser) {
+                        $browser->confirm();
+                    });
+            })->pause(1000);
     }
 
     /**
@@ -469,13 +661,13 @@ class IndexComponent extends Component
     public function restoreSelected(Browser $browser)
     {
         $browser->click('@delete-menu')
-                    ->pause(300)
-                    ->elsewhere('', function ($browser) {
-                        $browser->click('[dusk="restore-selected-button"]')
-                            ->whenAvailable('.modal[data-modal-open=true]', function ($browser) {
-                                $browser->click('@confirm-restore-button');
-                            });
-                    })->pause(1000);
+            ->pause(300)
+            ->elsewhere('', function ($browser) {
+                $browser->click('[dusk="restore-selected-button"]')
+                    ->elsewhereWhenAvailable(new Modals\RestoreResourceModalComponent(), function ($browser) {
+                        $browser->confirm();
+                    });
+            })->pause(1000);
     }
 
     /**
@@ -487,13 +679,13 @@ class IndexComponent extends Component
     public function forceDeleteSelected(Browser $browser)
     {
         $browser->click('@delete-menu')
-                    ->pause(300)
-                    ->elsewhere('', function ($browser) {
-                        $browser->click('[dusk="force-delete-selected-button"]')
-                            ->whenAvailable('.modal[data-modal-open=true]', function ($browser) {
-                                $browser->click('@confirm-delete-button');
-                            });
-                    })->pause(1000);
+            ->pause(300)
+            ->elsewhere('', function ($browser) {
+                $browser->click('[dusk="force-delete-selected-button"]')
+                    ->elsewhereWhenAvailable(new Modals\DeleteResourceModalComponent(), function ($browser) {
+                        $browser->confirm();
+                    });
+            })->pause(1000);
     }
 
     /**
@@ -510,8 +702,8 @@ class IndexComponent extends Component
 
         tap($this->selector(), function ($selector) use ($browser) {
             $browser->waitFor($selector)
-                    ->assertVisible($selector)
-                    ->scrollIntoView($selector);
+                ->assertVisible($selector)
+                ->scrollIntoView($selector);
         });
     }
 
@@ -528,7 +720,7 @@ class IndexComponent extends Component
         if (! is_null($pivotId)) {
             $browser->assertVisible('[dusk="'.$id.'-row"][data-pivot-id="'.$pivotId.'"]');
         } else {
-            $browser->assertVisible('@'.$id.'-row');
+            $browser->assertVisible("@{$id}-row");
         }
     }
 
@@ -545,23 +737,8 @@ class IndexComponent extends Component
         if (! is_null($pivotId)) {
             $browser->assertMissing('[dusk="'.$id.'-row"][data-pivot-id="'.$pivotId.'"]');
         } else {
-            $browser->assertMissing('@'.$id.'-row');
+            $browser->assertMissing("@{$id}-row");
         }
-    }
-
-    /**
-     * Assert on the matching total matching count text.
-     *
-     * @param  \Laravel\Dusk\Browser  $browser
-     * @param  int  $count
-     * @return void
-     */
-    public function assertSelectAllMatchingCount(Browser $browser, $count)
-    {
-        $browser->click('@select-all-dropdown')
-                        ->elsewhereWhenAvailable('@select-all-matching-button', function (Browser $browser) use ($count) {
-                            $browser->assertSeeIn('span:nth-child(2)', $count);
-                        });
     }
 
     /**

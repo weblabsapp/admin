@@ -67,7 +67,7 @@ class ResourceDetachController extends Controller
         Nova::usingActionEvent(function ($actionEvent) use ($pivot, $model, $parent, $request) {
             $actionEvent->insert(
                 $actionEvent->forResourceDetach(
-                    $request->user(), $parent, collect([$model]), $pivot->getMorphClass()
+                    Nova::user($request), $parent, collect([$model]), $pivot->getMorphClass()
                 )->map->getAttributes()->all()
             );
         });
@@ -87,6 +87,7 @@ class ResourceDetachController extends Controller
             ->whereInstanceOf(Deletable::class)
             ->filter->isPrunable()
             ->each(function ($field) use ($request, $pivot) {
+                /** @var \Laravel\Nova\Fields\Field&\Laravel\Nova\Contracts\Deletable $field */
                 DeleteField::forRequest($request, $field, $pivot)->save();
             });
     }

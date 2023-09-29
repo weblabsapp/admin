@@ -3,114 +3,78 @@
     :field="currentField"
     :label-for="labelFor"
     :errors="errors"
-    :full-width-content="true"
     :show-help-text="!isReadonly && showHelpText"
+    :full-width-content="fullWidthContent"
   >
     <template #field>
-      <div v-if="hasValue" :class="{ 'mb-6': !currentlyIsReadonly }">
-        <template v-if="shouldShowLoader">
-          <ImageLoader
-            :src="imageUrl"
-            :maxWidth="maxWidth"
-            :rounded="field.rounded"
-            @missing="value => (missing = value)"
-          />
-        </template>
-
-        <template v-if="field.value && !imageUrl">
-          <card
-            class="flex item-center relative border border-lg border-50 overflow-hidden p-4"
-          >
-            <span class="truncate mr-3"> {{ field.value }} </span>
-
-            <DeleteButton
-              :dusk="field.attribute + '-internal-delete-link'"
-              class="ml-auto"
-              v-if="shouldShowRemoveButton"
-              @click="confirmRemoval"
-            />
-          </card>
-        </template>
-
-        <p
-          v-if="imageUrl && !currentlyIsReadonly"
-          class="mt-3 flex items-center text-sm"
+      <!-- Existing Image -->
+      <div class="space-y-4">
+        <div
+          v-if="hasValue && previewFile && files.length === 0"
+          class="grid grid-cols-4 gap-x-6 gap-y-2"
         >
-          <DeleteButton
-            :dusk="field.attribute + '-delete-link'"
-            v-if="shouldShowRemoveButton"
-            @click="confirmRemoval"
-          >
-            <span class="class ml-2 mt-1"> {{ __('Delete') }} </span>
-          </DeleteButton>
-        </p>
+          <FilePreviewBlock
+            v-if="previewFile"
+            :file="previewFile"
+            :removable="shouldShowRemoveButton"
+            @removed="confirmRemoval"
+            :rounded="field.rounded"
+            :dusk="`${field.attribute}-delete-link`"
+          />
+        </div>
 
+        <!-- Upload Removal Modal -->
         <ConfirmUploadRemovalModal
           :show="removeModalOpen"
-          @confirm="removeFile"
+          @confirm="removeUploadedFile"
           @close="closeRemoveModal"
         />
-      </div>
 
-      <p v-if="!hasValue && currentlyIsReadonly" class="pt-2 text-sm text-90">
-        {{ __('This file field is read-only.') }}
-      </p>
-
-      <span
-        v-if="shouldShowField"
-        class="form-file mr-4"
-        :class="{ 'opacity-75': currentlyIsReadonly }"
-      >
-        <input
-          ref="fileField"
-          :dusk="field.attribute"
-          class="form-file-input select-none"
-          type="file"
-          :id="idAttr"
-          name="name"
-          @change="fileChange"
-          :disabled="currentlyIsReadonly || uploading"
-          :accept="field.acceptedTypes"
+        <!-- DropZone -->
+        <DropZone
+          v-if="shouldShowField"
+          :files="files"
+          @file-changed="handleFileChange"
+          @file-removed="file = null"
+          :rounded="field.rounded"
+          :accepted-types="field.acceptedTypes"
+          :disabled="file?.processing"
+          :dusk="`${field.attribute}-delete-link`"
+          :input-dusk="field.attribute"
         />
-        <label
-          :for="labelFor"
-          class="cursor-pointer focus:outline-none focus:ring rounded border-2 border-primary-300 dark:border-gray-500 hover:border-primary-500 active:border-primary-400 dark:hover:border-gray-400 dark:active:border-gray-300 bg-white dark:bg-transparent text-primary-500 dark:text-gray-400 px-3 h-9 inline-flex items-center font-bold flex-shrink-0"
-        >
-          <span v-if="uploading"
-            >{{ __('Uploading') }} ({{ uploadProgress }}%)</span
-          >
-          <span v-else>{{ __('Choose File') }}</span>
-        </label>
-      </span>
-
-      <span v-if="shouldShowField" class="text-90 text-sm select-none">
-        {{ currentLabel }}
-      </span>
-
-      <p v-if="hasError" class="text-xs mt-2 text-red-500">{{ firstError }}</p>
+      </div>
     </template>
   </DefaultField>
 </template>
 
 <script>
-import { Errors, DependentFormField, HandlesValidationErrors } from '@/mixins'
+import { DependentFormField, Errors, HandlesValidationErrors } from '@/mixins'
 import Vapor from 'laravel-vapor'
+
+function createFile(file) {
+  return {
+    name: file.name,
+    extension: file.name.split('.').pop(),
+    type: file.type,
+    originalFile: file,
+    vapor: false,
+    processing: false,
+    progress: 0,
+  }
+}
 
 export default {
   emits: ['file-upload-started', 'file-upload-finished', 'file-deleted'],
 
-  props: [
-    'resourceId',
-    'relatedResourceName',
-    'relatedResourceId',
-    'viaRelationship',
-  ],
-
   mixins: [HandlesValidationErrors, DependentFormField],
 
+  inject: ['removeFile'],
+
+  expose: ['beforeRemove'],
+
   data: () => ({
+    previewFile: null,
     file: null,
-    fileName: '',
     removeModalOpen: false,
     missing: false,
     deleted: false,
@@ -121,20 +85,24 @@ export default {
       filename: '',
       extension: '',
     },
-    uploading: false,
     uploadProgress: 0,
+    startedDrag: false,
+
+    uploadModalShown: false,
   }),
 
-  mounted() {
+  async mounted() {
+    this.preparePreviewImage()
+
     this.field.fill = formData => {
-      let attribute = this.field.attribute
+      let attribute = this.fieldAttribute
 
       if (this.file && !this.isVaporField) {
-        formData.append(attribute, this.file, this.fileName)
+        formData.append(attribute, this.file.originalFile, this.file.name)
       }
 
       if (this.file && this.isVaporField) {
-        formData.append(attribute, this.fileName)
+        formData.append(attribute, this.file.name)
         formData.append('vaporFile[' + attribute + '][key]', this.vaporFile.key)
         formData.append(
           'vaporFile[' + attribute + '][uuid]',
@@ -153,89 +121,99 @@ export default {
   },
 
   methods: {
-    /**
-     * Respond to the file change
-     */
-    fileChange(event) {
-      let path = event.target.value
-      let fileName = path.match(/[^\\/]*$/)[0]
-      this.fileName = fileName
-      let extension = fileName.split('.').pop()
-      this.file = this.$refs.fileField.files[0]
+    preparePreviewImage() {
+      if (this.hasValue && this.imageUrl) {
+        this.fetchPreviewImage()
+      }
 
-      if (this.isVaporField) {
-        this.uploading = true
-        this.$emit('file-upload-started')
-
-        Vapor.store(this.$refs.fileField.files[0], {
-          progress: progress => {
-            this.uploadProgress = Math.round(progress * 100)
-          },
-        }).then(response => {
-          this.vaporFile.key = response.key
-          this.vaporFile.uuid = response.uuid
-          this.vaporFile.filename = fileName
-          this.vaporFile.extension = extension
-          this.uploading = false
-          this.uploadProgress = 0
-          this.$emit('file-upload-finished')
+      if (this.hasValue && !this.imageUrl) {
+        this.previewFile = createFile({
+          name: this.currentField.value,
+          type: this.currentField.value.split('.').pop(),
         })
       }
     },
 
-    /**
-     * Confirm removal of the linked file
-     */
+    async fetchPreviewImage() {
+      let response = await fetch(this.imageUrl)
+      let data = await response.blob()
+
+      this.previewFile = createFile(
+        new File([data], this.currentField.value, { type: data.type })
+      )
+    },
+
+    handleFileChange(newFiles) {
+      this.file = createFile(newFiles[0])
+
+      if (this.isVaporField) {
+        this.file.vapor = true
+        this.uploadVaporFiles()
+      }
+    },
+
+    uploadVaporFiles() {
+      this.file.processing = true
+      this.$emit('file-upload-started')
+
+      Vapor.store(this.file.originalFile, {
+        progress: progress => {
+          this.file.progress = Math.round(progress * 100)
+        },
+      })
+        .then(response => {
+          this.vaporFile.key = response.key
+          this.vaporFile.uuid = response.uuid
+          this.vaporFile.filename = this.file.name
+          this.vaporFile.extension = this.file.extension
+          this.file.processing = false
+          this.file.progress = 100
+          this.$emit('file-upload-finished')
+        })
+        .catch(error => {
+          if (error.response.status === 403) {
+            Nova.error(
+              this.__('Sorry! You are not authorized to perform this action.')
+            )
+          }
+        })
+    },
+
     confirmRemoval() {
       this.removeModalOpen = true
     },
 
-    /**
-     * Close the upload removal modal
-     */
     closeRemoveModal() {
       this.removeModalOpen = false
     },
 
-    /**
-     * Remove the linked file from storage
-     */
-    async removeFile() {
-      this.uploadErrors = new Errors()
+    beforeRemove() {
+      this.removeUploadedFile()
+    },
 
-      const {
-        resourceName,
-        resourceId,
-        relatedResourceName,
-        relatedResourceId,
-        viaRelationship,
-      } = this
-      const attribute = this.field.attribute
-
-      const uri =
-        this.viaRelationship &&
-        this.relatedResourceName &&
-        this.relatedResourceId
-          ? `/nova-api/${resourceName}/${resourceId}/${relatedResourceName}/${relatedResourceId}/field/${attribute}?viaRelationship=${viaRelationship}`
-          : `/nova-api/${resourceName}/${resourceId}/field/${attribute}`
-
+    async removeUploadedFile() {
+      //   this.uploadErrors = new Errors()
       try {
-        await Nova.request().delete(uri)
-        this.closeRemoveModal()
-        this.deleted = true
+        await this.removeFile(this.fieldAttribute)
         this.$emit('file-deleted')
+        this.deleted = true
+        this.file = null
         Nova.success(this.__('The file was deleted!'))
       } catch (error) {
-        this.closeRemoveModal()
-
-        if (error.response?.status == 422) {
+        if (error.response?.status === 422) {
           this.uploadErrors = new Errors(error.response.data.errors)
         }
       }
+
+      this.closeRemoveModal()
     },
   },
 
   computed: {
+    files() {
+      return this.file ? [this.file] : []
+    },
+
     /**
      * Determine if the field has an upload error.
      */
@@ -250,13 +228,6 @@ export default {
       if (this.hasError) {
         return this.uploadErrors.first(this.fieldAttribute)
       }
-    },
-
-    /**
-     * The current label of the file field.
-     */
-    currentLabel() {
-      return this.fileName || this.__('no file selected')
     },
 
     /**
@@ -276,7 +247,7 @@ export default {
         name += '-' + this.relatedResourceName
       }
 
-      return `file-${name}-${this.field.attribute}`
+      return `file-${name}-${this.fieldAttribute}`
     },
 
     /**
@@ -319,17 +290,10 @@ export default {
     },
 
     /**
-     * Determine the maximum width of the field.
-     */
-    maxWidth() {
-      return this.currentField.maxWidth || 320
-    },
-
-    /**
      * Determining if the field is a Vapor field.
      */
     isVaporField() {
-      return this.currentField.component == 'vapor-file-field'
+      return this.currentField.component === 'vapor-file-field'
     },
   },
 }

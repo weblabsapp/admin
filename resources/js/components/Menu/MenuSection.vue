@@ -1,7 +1,12 @@
 <template>
   <div class="sidebar-section" v-if="item.path || item.items.length > 0">
     <!-- Section title with link -->
-    <Link v-if="item.path" :href="item.path" class="sidebar-section-title">
+    <Link
+      v-if="item.path"
+      :href="item.path"
+      class="sidebar-section-title"
+      @click="handleClick"
+    >
       <span class="sidebar-label">
         <span class="sidebar-icon">
           <component
@@ -16,6 +21,12 @@
           class="sidebar-section-label"
         >
           {{ item.name }}
+
+          <span v-if="item.badge" class="mx-2 absolute right-3">
+            <Badge :extra-classes="item.badge.typeClass">
+              {{ item.badge.value }}
+            </Badge>
+          </span>
         </span>
       </span>
     </Link>
@@ -25,7 +36,7 @@
       v-else-if="!item.path && item.collapsable"
       :aria-expanded="ariaExpanded"
       class="sidebar-section-title"
-      @click="handleClick"
+      @click="toggleCollapse"
     >
       <span class="sidebar-label">
         <span class="sidebar-icon">
@@ -38,6 +49,12 @@
 
         <span class="sidebar-section-label">
           {{ item.name }}
+        </span>
+
+        <span v-if="item.badge" class="mx-2 absolute right-8">
+          <Badge :extra-classes="item.badge.typeClass">
+            {{ item.badge.value }}
+          </Badge>
         </span>
       </span>
 
@@ -75,6 +92,7 @@
 
 <script>
 import { Collapsable } from '@/mixins'
+import { mapGetters, mapMutations } from 'vuex'
 
 export default {
   mixins: [Collapsable],
@@ -82,8 +100,20 @@ export default {
   props: ['item'],
 
   methods: {
+    ...mapMutations(['toggleMainMenu']),
+
     handleClick() {
-      this.toggleCollapse()
+      if (this.mainMenuShown) {
+        this.toggleMainMenu()
+      }
+    },
+  },
+
+  computed: {
+    ...mapGetters(['mainMenuShown']),
+
+    collapsedByDefault() {
+      return this.item?.collapsedByDefault ?? false
     },
   },
 }

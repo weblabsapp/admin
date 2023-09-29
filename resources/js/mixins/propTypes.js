@@ -1,6 +1,11 @@
 import pick from 'lodash/pick'
 
 const propTypes = {
+  nested: {
+    type: Boolean,
+    default: false,
+  },
+
   preventInitialLoading: {
     type: Boolean,
     default: false,
@@ -57,6 +62,19 @@ const propTypes = {
   disablePagination: {
     type: Boolean,
     default: false,
+  },
+
+  clickAction: {
+    type: String,
+    default: 'view',
+    validator: val => ['edit', 'select', 'ignore', 'detail'].includes(val),
+  },
+
+  mode: {
+    type: String,
+    default: 'form',
+    validator: v =>
+      ['form', 'modal', 'action-modal', 'action-fullscreen'].includes(v),
   },
 }
 

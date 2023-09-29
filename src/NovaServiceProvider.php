@@ -101,9 +101,11 @@ class NovaServiceProvider extends ServiceProvider
             Console\PartitionCommand::class,
             Console\ProgressCommand::class,
             Console\PublishCommand::class,
+            Console\RepeatableCommand::class,
             Console\ResourceCommand::class,
             Console\ResourceToolCommand::class,
             Console\StubPublishCommand::class,
+            Console\TableCommand::class,
             Console\TranslateCommand::class,
             Console\ToolCommand::class,
             Console\TrendCommand::class,
@@ -121,6 +123,7 @@ class NovaServiceProvider extends ServiceProvider
     protected function registerCollectionMacros()
     {
         Collection::macro('isAssoc', function () {
+            /** @phpstan-ignore-next-line */
             return Arr::isAssoc($this->toBase()->all());
         });
     }

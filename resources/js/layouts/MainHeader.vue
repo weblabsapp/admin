@@ -5,7 +5,7 @@
     >
       <button
         @click.prevent="toggleMainMenu"
-        class="lg:hidden inline-flex items-center justify-center ml-1 w-12 h-12 rounded-lg focus:ring focus:ring-inset focus:outline-none"
+        class="lg:hidden inline-flex items-center justify-center ml-1 w-12 h-12 rounded-lg focus:ring focus:ring-inset focus:outline-none ring-primary-200 dark:ring-gray-600"
         :aria-label="__('Toggle Sidebar')"
         :aria-expanded="mainMenuShown ? 'true' : 'false'"
       >
@@ -15,7 +15,7 @@
       <div class="hidden lg:w-60 flex-shrink-0 md:flex items-center">
         <Link
           :href="$url('/')"
-          class="text-gray-900 hover:text-gray-500 active:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300 dark:active:text-gray-500 h-12 rounded-lg flex items-center ml-2 focus:ring focus:ring-inset focus:outline-none px-4"
+          class="text-gray-900 hover:text-gray-500 active:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300 dark:active:text-gray-500 h-12 rounded-lg flex items-center ml-2 focus:ring focus:ring-inset focus:outline-none ring-primary-200 dark:ring-gray-600 px-4"
           :aria-label="appName"
         >
           <AppLogo class="h-6" />
@@ -26,7 +26,7 @@
 
       <div class="flex flex-1 px-4 sm:px-8 lg:px-12">
         <GlobalSearch
-          class="relative z-10"
+          class="relative z-50"
           v-if="globalSearchEnabled"
           dusk="global-search-component"
         />
@@ -41,11 +41,11 @@
 
     <!-- Mobile Sidebar -->
     <div class="lg:hidden w-60" :class="{ hidden: !mainMenuShown }">
-      <div class="fixed inset-0 flex z-40">
+      <div class="fixed inset-0 flex z-50">
         <div class="fixed inset-0" aria-hidden="true">
           <div
             @click="toggleMainMenu"
-            class="absolute inset-0 bg-gray-600 opacity-75"
+            class="absolute inset-0 bg-gray-600 dark:bg-gray-900 opacity-75"
           />
         </div>
 
@@ -80,7 +80,7 @@
           <div class="px-2 border-b border-gray-100 dark:border-gray-700">
             <Link
               :href="$url('/')"
-              class="h-12 px-2 rounded-lg flex items-center focus:ring focus:ring-inset focus:outline-none text-black"
+              class="text-gray-900 hover:text-gray-500 active:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300 dark:active:text-gray-500 h-12 px-2 rounded-lg flex items-center focus:ring focus:ring-inset focus:outline-none"
               :aria-label="appName"
             >
               <AppLogo class="h-6" />
@@ -88,13 +88,13 @@
           </div>
 
           <div class="overflow-x-auto">
-            <MainMenu class="mt-3 px-2" />
+            <MainMenu data-screen="responsive" class="mt-3 px-2" />
           </div>
 
           <div
             class="bg-white dark:bg-gray-800 absolute left-0 bottom-0 right-0 py-1 px-2 md:hidden border-t border-gray-100 dark:border-gray-700"
           >
-            <UserMenu />
+            <UserMenu :mobile="true" />
           </div>
 
           <div class="flex-shrink-0 w-14" aria-hidden="true">

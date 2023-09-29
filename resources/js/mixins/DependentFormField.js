@@ -1,4 +1,4 @@
-import { CancelToken } from 'axios'
+import { CancelToken, isCancel } from 'axios'
 import debounce from 'lodash/debounce'
 import forIn from 'lodash/forIn'
 import get from 'lodash/get'
@@ -8,20 +8,28 @@ import isNil from 'lodash/isNil'
 import pickBy from 'lodash/pickBy'
 import FormField from './FormField'
 import { mapProps } from './propTypes'
+import { escapeUnicode } from '../util/escapeUnicode'
 
 export default {
   extends: FormField,
-  props: mapProps([
-    'shownViaNewRelationModal',
-    'field',
-    'viaResource',
-    'viaResourceId',
-    'viaRelationship',
-    'resourceName',
-    'resourceId',
-    'relatedResourceName',
-    'relatedResourceId',
-  ]),
+
+  emits: ['field-shown', 'field-hidden'],
+
+  props: {
+    ...mapProps([
+      'shownViaNewRelationModal',
+      'field',
+      'viaResource',
+      'viaResourceId',
+      'viaRelationship',
+      'resourceName',
+      'resourceId',
+      'relatedResourceName',
+      'relatedResourceId',
+    ]),
+
+    syncEndpoint: { type: String, required: false },
+  },
 
   data: () => ({
     dependentFieldDebouncer: null,
@@ -57,7 +65,11 @@ export default {
         this.watchedEvents[dependsOn] = value => {
           this.watchedFields[dependsOn] = value
 
-          this.dependentFieldDebouncer(() => this.syncField())
+          this.dependentFieldDebouncer(() => {
+            this.watchedFields[dependsOn] = value
+
+            this.syncField()
+          })
         }
 
         this.watchedFields[dependsOn] = defaultValue
@@ -71,9 +83,11 @@ export default {
   },
 
   beforeUnmount() {
+    if (this.canceller !== null) this.canceller()
+
     if (!isEmpty(this.watchedEvents)) {
       forIn(this.watchedEvents, (event, dependsOn) => {
-        Nova.$off(this.getFieldAttributeChangeEventName(event.dependsOn), event)
+        Nova.$off(this.getFieldAttributeChangeEventName(dependsOn), event)
       })
     }
   },
@@ -91,28 +105,53 @@ export default {
         : this.value
     },
 
+    /**
+     * Provide a function to fills FormData when field is visible.
+     */
+    fillIfVisible(formData, attribute, value) {
+      if (this.currentlyIsVisible) {
+        formData.append(attribute, value)
+      }
+    },
+
     syncField() {
       if (this.canceller !== null) this.canceller()
 
       Nova.request()
-        .patch(this.syncFieldEndpoint, this.watchedFields, {
-          params: pickBy(
-            {
-              editing: true,
-              editMode: this.editMode,
-              viaResource: this.viaResource,
-              viaResourceId: this.viaResourceId,
-              viaRelationship: this.viaRelationship,
-              field: this.field.attribute,
-            },
-            identity
-          ),
-          cancelToken: new CancelToken(canceller => {
-            this.canceller = canceller
-          }),
-        })
+        .patch(
+          this.syncEndpoint || this.syncFieldEndpoint,
+          this.dependentFieldValues,
+          {
+            params: pickBy(
+              {
+                editing: true,
+                editMode: this.editMode,
+                viaResource: this.viaResource,
+                viaResourceId: this.viaResourceId,
+                viaRelationship: this.viaRelationship,
+                field: this.fieldAttribute,
+                component: this.field.dependentComponentKey,
+              },
+              identity
+            ),
+            cancelToken: new CancelToken(canceller => {
+              this.canceller = canceller
+            }),
+          }
+        )
         .then(response => {
+          let wasVisible = this.currentlyIsVisible
+
           this.syncedField = response.data
+
+          if (this.syncedField.visible !== wasVisible) {
+            this.$emit(
+              this.syncedField.visible === true
+                ? 'field-shown'
+                : 'field-hidden',
+              this.fieldAttribute
+            )
+          }
 
           if (isNil(this.syncedField.value)) {
             this.syncedField.value = this.field.value
@@ -120,21 +159,54 @@ export default {
             this.setInitialValue()
           }
 
+          let emitChangesEvent = !this.syncedFieldValueHasNotChanged()
+
           this.onSyncedField()
+
+          if (
+            this.syncedField.dependentShouldEmitChangesEvent &&
+            emitChangesEvent
+          ) {
+            this.emitOnSyncedFieldValueChange()
+          }
+        })
+        .catch(e => {
+          if (isCancel(e)) {
+            return
+          }
+
+          throw e
         })
     },
 
     onSyncedField() {
       //
     },
+
+    emitOnSyncedFieldValueChange() {
+      this.emitFieldValueChange(this.field.attribute, this.currentField.value)
+    },
+
+    syncedFieldValueHasNotChanged() {
+      const value = this.currentField.value
+
+      return !isNil(value) && value?.toString() === this.value?.toString()
+    },
   },
 
   computed: {
     /**
-     * Determine if the field is in readonly mode
+     * Determine the current field
      */
     currentField() {
       return this.syncedField || this.field
+    },
+
+    /**
+     * Determine if the field is in visible mode
+     */
+    currentlyIsVisible() {
+      return this.currentField.visible
     },
 
     /**
@@ -157,10 +229,27 @@ export default {
       return this.field.dependsOn || []
     },
 
+    currentFieldValues() {
+      return {
+        [this.fieldAttribute]: this.value,
+      }
+    },
+
+    dependentFieldValues() {
+      return {
+        ...this.currentFieldValues,
+        ...this.watchedFields,
+      }
+    },
+
+    encodedDependentFieldValues() {
+      return btoa(escapeUnicode(JSON.stringify(this.dependentFieldValues)))
+    },
+
     syncFieldEndpoint() {
       if (this.editMode === 'update-attached') {
         return `/nova-api/${this.resourceName}/${this.resourceId}/update-pivot-fields/${this.relatedResourceName}/${this.relatedResourceId}`
-      } else if (this.editMode == 'attach') {
+      } else if (this.editMode === 'attach') {
         return `/nova-api/${this.resourceName}/${this.resourceId}/creation-pivot-fields/${this.relatedResourceName}`
       } else if (this.editMode === 'update') {
         return `/nova-api/${this.resourceName}/${this.resourceId}/update-fields`

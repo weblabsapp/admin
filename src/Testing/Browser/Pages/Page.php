@@ -13,6 +13,8 @@ class Page extends Dusk
 
     public $novaPageUrl;
 
+    public $queryParams;
+
     /**
      * Create a new page instance.
      *
@@ -31,6 +33,10 @@ class Page extends Dusk
      */
     public function url()
     {
+        if ($this->queryParams) {
+            return $this->novaPageUrl.'?'.http_build_query($this->queryParams);
+        }
+
         return $this->novaPageUrl;
     }
 
@@ -43,8 +49,8 @@ class Page extends Dusk
     public function assertOk(Browser $browser)
     {
         $browser->waitForLocation($this->novaPageUrl)
-                ->assertPathIs($this->novaPageUrl)
-                ->waitFor('@nova-content');
+            ->assertPathIs($this->novaPageUrl)
+            ->waitFor('@nova-content');
     }
 
     /**
@@ -70,6 +76,17 @@ class Page extends Dusk
     }
 
     /**
+     * Assert page doesn't contain breadcrumb.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @return void
+     */
+    public function assertWithoutBreadcrumb(Browser $browser)
+    {
+        $browser->assertMissing('@nova-breadcrumb');
+    }
+
+    /**
      * Get the global element shortcuts for the site.
      *
      * @return array
@@ -78,7 +95,8 @@ class Page extends Dusk
     {
         return [
             '@nova-content' => '#app [data-testid="content"]',
-            '@nova-form' => '#app [data-testid="content"] form',
+            '@nova-form' => '#app [data-testid="content"] form:not([data-testid="form-button"])',
+            '@nova-breadcrumb' => '#app [data-testid="content"] nav[aria-label="breadcrumb"]',
         ];
     }
 

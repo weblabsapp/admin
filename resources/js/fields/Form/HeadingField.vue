@@ -1,27 +1,36 @@
 <template>
-  <FieldWrapper class="bg-gray-100 dark:bg-gray-700">
-    <div v-if="shouldDisplayAsHtml" v-html="field.value" :class="classes" />
+  <FieldWrapper v-if="currentField.visible">
+    <!--    :class="{ 'rounded-t-lg': index === 0 }"-->
+    <div
+      v-if="shouldDisplayAsHtml"
+      v-html="currentField.value"
+      :class="classes"
+    />
     <div v-else :class="classes">
-      <p>{{ field.value }}</p>
+      <Heading :level="3">{{ currentField.value }}</Heading>
     </div>
   </FieldWrapper>
 </template>
 
 <script>
+import { DependentFormField } from '@/mixins'
+
 export default {
+  mixins: [DependentFormField],
+
   props: {
-    resourceName: {
-      type: String,
-      require: true,
-    },
-    field: {
-      type: Object,
-      require: true,
-    },
+    index: { type: Number },
+    resourceName: { type: String, require: true },
+    field: { type: Object, require: true },
   },
 
-  created() {
-    this.field.fill = () => {}
+  methods: {
+    /**
+     * Provide a function to fills FormData when field is visible.
+     */
+    fillIfVisible(formData, attribute, value) {
+      //
+    },
   },
 
   computed: {
@@ -34,7 +43,7 @@ export default {
     ],
 
     shouldDisplayAsHtml() {
-      return this.field.asHtml || false
+      return this.currentField.asHtml || false
     },
   },
 }

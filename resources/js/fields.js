@@ -1,5 +1,5 @@
-import upperFirst from 'lodash/upperFirst'
 import camelCase from 'lodash/camelCase'
+import upperFirst from 'lodash/upperFirst'
 
 function registerComponents(app, type, requireComponent) {
   requireComponent.keys().forEach(fileName => {

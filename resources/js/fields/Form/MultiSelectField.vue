@@ -3,10 +3,11 @@
     :field="currentField"
     :errors="errors"
     :show-help-text="showHelpText"
+    :full-width-content="fullWidthContent"
   >
     <template #field>
       <!-- Select Input Field -->
-      <MutilSelectControl
+      <MultiSelectControl
         :id="currentField.uniqueKey"
         :dusk="field.attribute"
         v-model:selected="value"
@@ -14,50 +15,55 @@
         class="w-full"
         :class="errorClasses"
         :options="currentField.options"
-        :disabled="isReadonly"
+        :disabled="currentlyIsReadonly"
       >
-        <option value="" :selected="!hasValue" :disabled="!field.nullable">
+        <option
+          v-if="shouldShowPlaceholder"
+          value=""
+          :selected="!hasValue"
+          :disabled="!currentField.nullable"
+        >
           {{ placeholder }}
         </option>
-      </MutilSelectControl>
+      </MultiSelectControl>
     </template>
   </DefaultField>
 </template>
 
 <script>
-import find from 'lodash/find'
+import filter from 'lodash/filter'
+import map from 'lodash/map'
+import merge from 'lodash/merge'
 import { DependentFormField, HandlesValidationErrors } from '@/mixins'
+import filled from '@/util/filled'
 
 export default {
   mixins: [HandlesValidationErrors, DependentFormField],
 
   data: () => ({
     value: [],
-    selectedOption: [],
     search: '',
   }),
-
-  created() {
-    if (this.field.value && this.isSearchable) {
-      this.selectedOption = find(
-        this.field.options ?? [],
-        v => this.field.value.indexOf(v.value) >= 0
-      )
-    }
-  },
 
   methods: {
     /*
      * Set the initial value for the field
      */
     setInitialValue() {
-      this.value = !(
+      let values = !(
         this.currentField.value === undefined ||
         this.currentField.value === null ||
         this.currentField.value === ''
       )
-        ? this.currentField.value
+        ? merge(this.currentField.value || [], this.value)
         : this.value
+
+      let selectedOptions = filter(
+        this.currentField.options ?? [],
+        v => values.indexOf(v.value) >= 0
+      )
+
+      this.value = map(selectedOptions, o => o.value)
     },
 
     /**
@@ -68,7 +74,11 @@ export default {
      * are truthy or falsey
      */
     fill(formData) {
-      formData.append(this.field.attribute, JSON.stringify(this.value))
+      this.fillIfVisible(
+        formData,
+        this.fieldAttribute,
+        JSON.stringify(this.value)
+      )
     },
 
     /**
@@ -85,8 +95,12 @@ export default {
       this.value = value
 
       if (this.field) {
-        this.emitFieldValueChange(this.field.attribute, this.value)
+        this.emitFieldValueChange(this.fieldAttribute, this.value)
       }
+    },
+
+    onSyncedField() {
+      this.setInitialValue()
     },
   },
 
@@ -118,6 +132,10 @@ export default {
       return Boolean(
         !(this.value === undefined || this.value === null || this.value === '')
       )
+    },
+
+    shouldShowPlaceholder() {
+      return filled(this.currentField.placeholder) || this.currentField.nullable
     },
   },
 }

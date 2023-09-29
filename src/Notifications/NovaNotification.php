@@ -2,7 +2,10 @@
 
 namespace Laravel\Nova\Notifications;
 
+use Laravel\Nova\Exceptions\HelperNotSupported;
 use Laravel\Nova\Makeable;
+use Laravel\Nova\Nova;
+use Laravel\Nova\URL;
 
 class NovaNotification extends \Illuminate\Notifications\Notification
 {
@@ -25,7 +28,7 @@ class NovaNotification extends \Illuminate\Notifications\Notification
         self::SUCCESS_TYPE => 'text-green-500',
         self::ERROR_TYPE => 'text-red-500',
         self::WARNING_TYPE => 'text-yellow-500',
-        self::INFO_TYPE => 'text-blue-500',
+        self::INFO_TYPE => 'text-sky-500',
     ];
 
     /**
@@ -62,6 +65,13 @@ class NovaNotification extends \Illuminate\Notifications\Notification
      * @var \Laravel\Nova\URL|string|null
      */
     public $actionUrl;
+
+    /**
+     * Determine if URL should be open in new tab.
+     *
+     * @var bool
+     */
+    public $openInNewTab = false;
 
     /**
      * The notification's visual type.
@@ -125,6 +135,22 @@ class NovaNotification extends \Illuminate\Notifications\Notification
     }
 
     /**
+     * Set URL to open in new tab.
+     *
+     * @return $this
+     */
+    public function openInNewTab()
+    {
+        if ($this->actionUrl instanceof URL && $this->actionUrl->remote === true) {
+            $this->openInNewTab = true;
+        } else {
+            throw new HelperNotSupported(sprintf('The %s helper method is only applicable on remote URL.', __METHOD__));
+        }
+
+        return $this;
+    }
+
+    /**
      * Set the notification's visual type.
      *
      * @param  string  $type
@@ -148,8 +174,9 @@ class NovaNotification extends \Illuminate\Notifications\Notification
             'component' => $this->component,
             'icon' => $this->icon,
             'message' => $this->message,
-            'actionText' => __($this->actionText),
+            'actionText' => Nova::__($this->actionText),
             'actionUrl' => $this->actionUrl,
+            'openInNewTab' => $this->openInNewTab,
             'type' => $this->type,
             'iconClass' => static::$types[$this->type],
         ];

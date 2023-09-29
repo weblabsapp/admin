@@ -6,7 +6,7 @@ use Illuminate\Support\Arr;
 use Laravel\Nova\Fields\Filters\StatusFilter;
 use Laravel\Nova\Http\Requests\NovaRequest;
 
-class Status extends Text
+class Status extends Text implements Unfillable
 {
     /**
      * The field's component.
@@ -88,7 +88,6 @@ class Status extends Text
                 return 'bg-gray-100 text-gray-500 dark:bg-gray-900 dark:text-gray-400';
             case 'failed':
                 return 'bg-red-100 text-red-600 dark:bg-red-400 dark:text-red-900';
-            case 'failed':
             default:
                 return 'bg-green-100 text-green-600 dark:bg-green-400 dark:text-green-900';
         }

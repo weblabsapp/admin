@@ -10,13 +10,14 @@ import { registerViews } from './components'
 import { registerFields } from './fields'
 import Mousetrap from 'mousetrap'
 import Form from 'form-backend-validation'
-import { createStore } from 'vuex'
-import NovaStore from './store/nova'
+import { createNovaStore } from './store'
 import resourceStore from './store/resources'
 import FloatingVue from 'floating-vue'
 import find from 'lodash/find'
 import isNil from 'lodash/isNil'
+import fromPairs from 'lodash/fromPairs'
 import isString from 'lodash/isString'
+import omit from 'lodash/omit'
 import Toasted from 'toastedjs'
 import Emitter from 'tiny-emitter'
 import Layout from '@/layouts/AppLayout'
@@ -37,8 +38,11 @@ import 'codemirror/keymap/vim'
 import 'codemirror/mode/sql/sql'
 import 'codemirror/mode/twig/twig'
 import 'codemirror/mode/htmlmixed/htmlmixed'
+import { ColorTranslator } from 'colortranslator'
 
 import 'floating-vue/dist/style.css'
+
+const { parseColor } = require('tailwindcss/lib/util/color')
 
 CodeMirror.defineMode('htmltwig', function (config, parserConfig) {
   return CodeMirror.overlayMode(
@@ -57,7 +61,6 @@ const { createApp, h } = window.Vue
 class Nova {
   constructor(config) {
     this.bootingCallbacks = []
-    this.bootedCallbacks = []
     this.appConfig = config
     this.useShortcuts = true
 
@@ -81,10 +84,11 @@ class Nova {
 
     this.$toasted = new Toasted({
       theme: 'nova',
-      position: 'bottom-right',
+      position: config.rtlEnabled ? 'bottom-left' : 'bottom-right',
       duration: 6000,
     })
     this.$progress = NProgress
+    this.$router = Inertia
   }
 
   /**
@@ -99,14 +103,13 @@ class Nova {
    * Execute all of the booting callbacks.
    */
   boot() {
-    this.store = createStore({ ...NovaStore })
+    this.store = createNovaStore()
 
     this.bootingCallbacks.forEach(callback => callback(this.app, this.store))
     this.bootingCallbacks = []
   }
 
   booted(callback) {
-    // this.bootedCallbacks.push(callback)
     callback(this.app, this.store)
   }
 
@@ -135,6 +138,8 @@ class Nova {
 
         this.app.use(plugin)
         this.app.use(FloatingVue, {
+          preventOverflow: true,
+          flip: true,
           themes: {
             Nova: {
               $extend: 'tooltip',
@@ -192,12 +197,12 @@ class Nova {
       },
     })
 
-    this.app.component('Link', Link)
-    this.app.component('InertiaLink', Link)
-    this.app.component('Head', Head)
+    this.component('Link', Link)
+    this.component('InertiaLink', Link)
+    this.component('Head', Head)
 
-    registerViews(this.app)
-    registerFields(this.app)
+    registerViews(this)
+    registerFields(this)
 
     this.app.mount(this.mountTo)
 
@@ -290,7 +295,9 @@ class Nova {
    * Determine if Nova is missing the requested resource with the given uri key
    */
   missingResource(uriKey) {
-    return find(this.config('resources'), r => r.uriKey == uriKey) == undefined
+    return (
+      find(this.config('resources'), r => r.uriKey === uriKey) === undefined
+    )
   }
 
   /**
@@ -325,11 +332,11 @@ class Nova {
    * Register the built-in Vuex modules for each resource
    */
   registerStoreModules() {
+    this.app.use(this.store)
+
     this.config('resources').forEach(resource => {
       this.store.registerModule(resource.uriKey, resourceStore)
     })
-
-    this.app.use(this.store)
   }
 
   /**
@@ -337,6 +344,15 @@ class Nova {
    */
   inertia(name, component) {
     this.pages[name] = component
+  }
+
+  /**
+   * Register a custom Vue component.
+   */
+  component(name, component) {
+    if (isNil(this.app._context.components[name])) {
+      this.app.component(name, component)
+    }
   }
 
   /**
@@ -405,49 +421,89 @@ class Nova {
    * Redirect to login path.
    */
   redirectToLogin() {
-    if (!this.config('withAuthentication') && this.config('customLoginPath')) {
-      this.visit({
-        remote: true,
-        url: this.config('customLoginPath'),
-      })
+    const url =
+      !this.config('withAuthentication') && this.config('customLoginPath')
+        ? this.config('customLoginPath')
+        : this.url('/login')
 
-      return
-    }
-
-    this.visit('/login')
+    this.visit({
+      remote: true,
+      url,
+    })
   }
 
   /**
    * Visit page using Inertia visit or window.location for remote.
    */
   visit(path, options) {
+    options = options || {}
+    const openInNewTab = options?.openInNewTab || null
+
     if (isString(path)) {
-      Inertia.visit(this.url(path), options || {})
+      Inertia.visit(this.url(path), omit(options, ['openInNewTab']))
       return
     }
 
     if (isString(path.url) && path.hasOwnProperty('remote')) {
-      if (path.remote == true) {
-        window.location = path.url
+      if (path.remote === true) {
+        if (openInNewTab === true) {
+          window.open(path.url, '_blank')
+        } else {
+          window.location = path.url
+        }
+
         return
       }
 
-      Inertia.visit(path.url, options || {})
+      Inertia.visit(path.url, omit(options, ['openInNewTab']))
     }
   }
 
   applyTheme() {
-    if (Object.keys(this.config('brandColors')).length > 0) {
+    const brandColors = this.config('brandColors')
+
+    if (Object.keys(brandColors).length > 0) {
       const style = document.createElement('style')
 
-      style.innerHTML = `
-:root {
-  --colors-primary-400: ${this.config('brandColors')['400']};
-  --colors-primary-500: ${this.config('brandColors')['500']};
-  --colors-primary-600: ${this.config('brandColors')['600']};
-}
-    `
+      // Handle converting any non-RGB user strings into valid RGB strings.
+      // This allows the user to specify any color in HSL, RGB, and RGBA
+      // format, and we'll convert it to the proper format for them.
+      let css = Object.keys(brandColors).reduce((carry, v) => {
+        let colorValue = brandColors[v]
+        let validColor = parseColor(colorValue)
+
+        if (validColor) {
+          let parsedColor = parseColor(
+            ColorTranslator.toRGBA(convertColor(validColor))
+          )
+
+          let rgbaString = `${parsedColor.color.join(' ')} / ${
+            parsedColor.alpha
+          }`
+
+          return carry + `\n  --colors-primary-${v}: ${rgbaString};`
+        }
+
+        return carry + `\n  --colors-primary-${v}: ${colorValue};`
+      }, '')
+
+      style.innerHTML = `:root {${css}\n}`
+
       document.head.append(style)
     }
   }
+}
+
+function convertColor(parsedColor) {
+  let color = fromPairs(
+    Array.from(parsedColor.mode).map((v, i) => {
+      return [v, parsedColor.color[i]]
+    })
+  )
+
+  if (parsedColor.alpha !== undefined) {
+    color.a = parsedColor.alpha
+  }
+
+  return color
 }

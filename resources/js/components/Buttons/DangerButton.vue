@@ -3,7 +3,7 @@
     v-bind="{ ...$props, ...$attrs }"
     :component="component"
     ref="button"
-    class="shadow relative bg-red-400 hover:bg-red-100 active:bg-red-600 text-red-50 hover:text-red-600 active:text-white dark:text-gray-900"
+    class="shadow relative bg-red-500 hover:bg-red-400 text-white"
   >
     <slot />
   </BasicButton>

@@ -30,20 +30,16 @@
 
       <div
         ref="chart"
+        class="right-[20px]"
         :class="chartClasses"
-        style="
-          width: 90px;
-          height: 90px;
-          right: 20px;
-          bottom: 30px;
-          top: calc(50% + 15px);
-        "
+        style="width: 90px; height: 90px; bottom: 30px; top: calc(50% + 15px)"
       />
     </div>
   </LoadingCard>
 </template>
 
 <script>
+import debounce from 'lodash/debounce'
 import map from 'lodash/map'
 import sumBy from 'lodash/sumBy'
 import Chartist from 'chartist'
@@ -74,12 +70,25 @@ export default {
     chartData: Array,
   },
 
-  data: () => ({ chartist: null }),
+  data: () => ({
+    chartist: null,
+    resizeObserver: null,
+  }),
 
   watch: {
     chartData: function (newData, oldData) {
       this.renderChart()
     },
+  },
+
+  created() {
+    const debouncer = debounce(callback => callback(), Nova.config('debounce'))
+
+    this.resizeObserver = new ResizeObserver(entries => {
+      debouncer(() => {
+        this.renderChart()
+      })
+    })
   },
 
   mounted() {
@@ -102,6 +111,12 @@ export default {
         })
       }
     })
+
+    this.resizeObserver.observe(this.$refs.chart)
+  },
+
+  beforeUnmount() {
+    this.resizeObserver.unobserve(this.$refs.chart)
   },
 
   methods: {

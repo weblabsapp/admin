@@ -5,6 +5,7 @@ namespace Laravel\Nova\Http\Resources;
 use Illuminate\Database\Eloquent\Builder;
 use Laravel\Nova\Fields\ID;
 use Laravel\Nova\Http\Requests\LensRequest;
+use Laravel\Nova\Query\ApplySoftDeleteConstraint;
 
 class LensViewResource extends Resource
 {
@@ -18,14 +19,20 @@ class LensViewResource extends Resource
     {
         $lens = $this->authorizedLensForRequest($request);
 
-        $paginator = $lens->query($request, $request->newQuery());
+        $query = $request->newSearchQuery();
+
+        if ($request->resourceSoftDeletes()) {
+            (new ApplySoftDeleteConstraint)->__invoke($query, $request->trashed);
+        }
+
+        $paginator = $lens->query($request, $query);
 
         if ($paginator instanceof Builder) {
             $paginator = $paginator->simplePaginate($request->perPage());
         }
 
         return [
-            'name' => $request->lens()->name(),
+            'name' => $lens->name(),
             'resources' => $request->toResources($paginator->getCollection()),
             'prev_page_url' => $paginator->previousPageUrl(),
             'next_page_url' => $paginator->nextPageUrl(),

@@ -3,7 +3,7 @@
     <button
       ref="trigger"
       :aria-expanded="show === true ? 'true' : 'false'"
-      class="rounded active:outline-none active:ring focus:outline-none focus:ring"
+      class="rounded active:outline-none active:ring focus:outline-none focus:ring focus:ring-primary-200 dark:focus:ring-gray-600"
       type="button"
       @click.stop="showMenu"
     >
@@ -14,7 +14,8 @@
       <div
         v-show="show"
         ref="menu"
-        class="relative z-40"
+        class="relative"
+        :class="extraClasses"
         :data-menu-open="show"
         @click="handleClick"
       >
@@ -65,6 +66,10 @@ export default {
       type: Boolean,
       default: true,
     },
+
+    triggerOverrideFunction: {
+      type: Function,
+    },
   },
 
   data: () => ({
@@ -85,7 +90,7 @@ export default {
        * Create the popper for the containing element.
        */
       this.popper = createPopper(this.$refs.trigger, this.$refs.menu, {
-        placement: this.placement,
+        placement: this.resolvedPlacement,
         boundary: this.boundary,
         modifiers: {
           name: 'offset',
@@ -100,6 +105,11 @@ export default {
      * Show the dropdown menu.
      */
     showMenu() {
+      if (this.triggerOverrideFunction) {
+        this.triggerOverrideFunction()
+        return
+      }
+
       if (this.debouncedHideMenu) {
         this.debouncedHideMenu.cancel()
         this.debouncedHideMenu = null
@@ -136,6 +146,31 @@ export default {
       }
 
       this.debouncedHideMenu()
+    },
+  },
+
+  computed: {
+    extraClasses() {
+      return ['z-40']
+    },
+
+    resolvedPlacement() {
+      if (!Nova.config('rtlEnabled')) {
+        return this.placement
+      }
+
+      return {
+        'auto-start': 'auto-end',
+        'auto-end': 'auto-start',
+        'top-start': 'top-end',
+        'top-end': 'top-start',
+        'bottom-start': 'bottom-end',
+        'bottom-end': 'bottom-start',
+        'right-start': 'right-end',
+        'right-end': 'right-start',
+        'left-start': 'left-end',
+        'left-end': 'left-start',
+      }[this.placement]
     },
   },
 }

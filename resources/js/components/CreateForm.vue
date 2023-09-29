@@ -11,13 +11,15 @@
     </template>
 
     <form
+      class="space-y-8"
       v-if="panels"
       @submit="submitViaCreateResource"
       @change="onUpdateFormStatus"
+      :data-form-unique-id="formUniqueId"
       autocomplete="off"
       ref="form"
     >
-      <div class="mb-8 space-y-4">
+      <div class="space-y-4">
         <component
           v-for="panel in panels"
           :key="panel.id"
@@ -31,11 +33,12 @@
           :resource-name="resourceName"
           :fields="panel.fields"
           :form-unique-id="formUniqueId"
-          mode="form"
+          :mode="mode"
           :validation-errors="validationErrors"
           :via-resource="viaResource"
           :via-resource-id="viaResourceId"
           :via-relationship="viaRelationship"
+          :show-help-text="true"
         />
       </div>
 
@@ -76,9 +79,9 @@
 
 <script>
 import each from 'lodash/each'
+import isNil from 'lodash/isNil'
 import tap from 'lodash/tap'
 import {
-  Errors,
   HandlesFormRequest,
   HandlesUploads,
   InteractsWithResourceInformation,
@@ -87,7 +90,12 @@ import {
 import { mapActions, mapMutations } from 'vuex'
 
 export default {
-  emits: ['resource-created', 'create-cancelled', 'update-form-status'],
+  emits: [
+    'resource-created',
+    'resource-created-and-adding-another',
+    'create-cancelled',
+    'update-form-status',
+  ],
 
   mixins: [
     HandlesFormRequest,
@@ -160,7 +168,7 @@ export default {
 
     this.getFields()
 
-    this.mode == 'form' ? this.allowLeavingForm() : this.allowLeavingModal()
+    this.mode === 'form' ? this.allowLeavingForm() : this.allowLeavingModal()
   },
 
   methods: {
@@ -200,6 +208,7 @@ export default {
           params: {
             editing: true,
             editMode: 'create',
+            inline: this.shownViaNewRelationModal,
             fromResourceId: this.fromResourceId,
             viaResource: this.viaResource,
             viaResourceId: this.viaResourceId,
@@ -255,9 +264,13 @@ export default {
           if (this.submittedViaCreateResource) {
             this.$emit('resource-created', { id, redirect })
           } else {
+            window.scrollTo(0, 0)
+
+            this.$emit('resource-created-and-adding-another', { id })
+
             // Reset the form by refetching the fields
             this.getFields()
-            this.validationErrors = new Errors()
+            this.resetErrors()
             this.submittedViaCreateAndAddAnother = false
             this.submittedViaCreateResource = false
             this.isWorking = false
@@ -311,6 +324,10 @@ export default {
           })
         })
 
+        if (!isNil(this.fromResourceId)) {
+          formData.append('fromResourceId', this.fromResourceId)
+        }
+
         formData.append('viaResource', this.viaResource)
         formData.append('viaResourceId', this.viaResourceId)
         formData.append('viaRelationship', this.viaRelationship)
@@ -351,11 +368,11 @@ export default {
     },
 
     shownViaNewRelationModal() {
-      return this.mode == 'modal'
+      return this.mode === 'modal'
     },
 
     inFormMode() {
-      return this.mode == 'form'
+      return this.mode === 'form'
     },
 
     canAddMoreResources() {

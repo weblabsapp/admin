@@ -1,7 +1,7 @@
 <template>
   <PanelItem :index="index" :field="field">
     <template #value>
-      <p v-if="field.value" class="text-90" :title="field.originalValue">
+      <p v-if="fieldHasValue || usesCustomizedDisplay" :title="field.value">
         {{ formattedDateTime }}
       </p>
       <p v-else>&mdash;</p>
@@ -11,18 +11,21 @@
 
 <script>
 import { DateTime } from 'luxon'
+import { FieldValue } from '@/mixins'
 
 export default {
+  mixins: [FieldValue],
+
   props: ['index', 'resource', 'resourceName', 'resourceId', 'field'],
 
   computed: {
     formattedDateTime() {
-      if (this.field.usesCustomizedDisplay) {
-        return this.field.value
+      if (this.usesCustomizedDisplay) {
+        return this.field.displayedAs
       }
 
       return DateTime.fromISO(this.field.value)
-        .setZone(Nova.config('userTimezone') || Nova.config('timezone'))
+        .setZone(this.timezone)
         .toLocaleString({
           year: 'numeric',
           month: '2-digit',
@@ -31,6 +34,10 @@ export default {
           minute: '2-digit',
           timeZoneName: 'short',
         })
+    },
+
+    timezone() {
+      return Nova.config('userTimezone') || Nova.config('timezone')
     },
   },
 }

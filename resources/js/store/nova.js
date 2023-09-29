@@ -1,4 +1,5 @@
 import { usePage } from '@inertiajs/inertia-vue3'
+import { Inertia } from '@inertiajs/inertia'
 
 export default {
   state: () => ({
@@ -6,14 +7,13 @@ export default {
     currentUser: null,
     mainMenu: [],
     userMenu: [],
+    breadcrumbs: [],
     resources: [],
     version: '4.x',
     mainMenuShown: false,
-    notificationsShown: false,
-    notifications: [],
-    unreadNotifications: false,
     canLeaveForm: true,
     canLeaveModal: true,
+    pushStateWasTriggered: false,
     validLicense: true,
   }),
 
@@ -22,11 +22,10 @@ export default {
     currentVersion: s => s.version,
     mainMenu: s => s.mainMenu,
     userMenu: s => s.userMenu,
+    breadcrumbs: s => s.breadcrumbs,
     mainMenuShown: s => s.mainMenuShown,
-    notificationsShown: s => s.notificationsShown,
-    notifications: s => s.notifications,
-    unreadNotifications: s => s.unreadNotifications,
     canLeaveForm: s => s.canLeaveForm,
+    canLeaveFormToPreviousPage: s => s.canLeaveForm && !s.pushStateWasTriggered,
     canLeaveModal: s => s.canLeaveModal,
     validLicense: s => s.validLicense,
   },
@@ -48,14 +47,19 @@ export default {
       state.canLeaveModal = false
     },
 
+    triggerPushState(state) {
+      Inertia.pushState(Inertia.page)
+      Inertia.ignoreHistoryState = true
+      state.pushStateWasTriggered = true
+    },
+
+    resetPushState(state) {
+      state.pushStateWasTriggered = false
+    },
+
     toggleMainMenu(state) {
       state.mainMenuShown = !state.mainMenuShown
       localStorage.setItem('nova.mainMenu.open', state.mainMenuShown)
-    },
-
-    toggleNotifications(state) {
-      state.notificationsShown = !state.notificationsShown
-      localStorage.setItem('nova.mainMenu.open', state.notificationsShown)
     },
   },
 
@@ -119,8 +123,10 @@ export default {
 
       let user = usePage().props.value.currentUser
       let validLicense = usePage().props.value.validLicense
+      let breadcrumbs = usePage().props.value.breadcrumbs
 
       Nova.appConfig = config
+      state.breadcrumbs = breadcrumbs || []
       state.currentUser = user
       state.validLicense = validLicense
       state.resources = resources
@@ -132,30 +138,6 @@ export default {
 
     async fetchPolicies({ state, dispatch }) {
       await dispatch('assignPropsFromInertia')
-    },
-
-    async fetchNotifications({ state }) {
-      const {
-        data: { notifications, unread },
-      } = await Nova.request().get(`/nova-api/nova-notifications`)
-
-      state.notifications = notifications
-      state.unreadNotifications = unread
-    },
-
-    async markNotificationAsRead({ state, dispatch }, id) {
-      await Nova.request().post(`/nova-api/nova-notifications/${id}/read`)
-      dispatch('fetchNotifications')
-    },
-
-    async deleteNotification({ state, dispatch }, id) {
-      await Nova.request().delete(`/nova-api/nova-notifications/${id}/delete`)
-      dispatch('fetchNotifications')
-    },
-
-    async markAllNotificationsAsRead({ state, dispatch }, id) {
-      await Nova.request().post(`/nova-api/nova-notifications/read-all`)
-      dispatch('fetchNotifications')
     },
   },
 }

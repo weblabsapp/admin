@@ -12,12 +12,16 @@
     }"
   >
     <div class="flex items-center flex-1">
-      <SelectAllDropdown
-        v-if="shouldShowCheckBoxes"
-        :all-matching-resource-count="allMatchingResourceCount"
-        @toggle-select-all="toggleSelectAll"
-        @toggle-select-all-matching="toggleSelectAllMatching"
-      />
+      <div class="md:ml-3">
+        <SelectAllDropdown
+          v-if="shouldShowCheckBoxes"
+          :all-matching-resource-count="allMatchingResourceCount"
+          :current-page-count="currentPageCount"
+          @toggle-select-all="toggleSelectAll"
+          @toggle-select-all-matching="toggleSelectAllMatching"
+          @deselect="$emit('deselect')"
+        />
+      </div>
 
       <!-- Toolbar Items -->
       <div class="h-9 ml-auto flex items-center pr-2 md:pr-3">
@@ -26,11 +30,13 @@
           <ActionSelector
             v-if="shouldShowActionSelector"
             :resource-name="resourceName"
+            :via-resource="actionQueryString.viaResource"
+            :via-resource-id="actionQueryString.viaResourceId"
+            :via-relationship="actionQueryString.viaRelationship"
             :actions="availableActions"
             :pivot-actions="pivotActions"
             :pivot-name="pivotName"
             :endpoint="actionsEndpoint"
-            :action-query-string="actionQueryString"
             :selected-resources="selectedResourcesForActionSelector"
             @actionExecuted="getResources"
           />
@@ -110,11 +116,13 @@
       <ActionSelector
         width="full"
         :resource-name="resourceName"
+        :via-resource="actionQueryString.viaResource"
+        :via-resource-id="actionQueryString.viaResourceId"
+        :via-relationship="actionQueryString.viaRelationship"
         :actions="availableActions"
         :pivot-actions="pivotActions"
         :pivot-name="pivotName"
         :endpoint="actionsEndpoint"
-        :query-string="actionQueryString"
         :selected-resources="selectedResourcesForActionSelector"
         @actionExecuted="getResources"
       />
@@ -124,7 +132,7 @@
 
 <script>
 export default {
-  emits: ['start-polling', 'stop-polling'],
+  emits: ['start-polling', 'stop-polling', 'deselect'],
 
   props: [
     'actionsEndpoint',
@@ -158,6 +166,7 @@ export default {
     'resources',
     'resourceInformation',
     'resourceName',
+    'currentPageCount',
     'restoreAllMatchingResources',
     'restoreSelectedResources',
     'selectAllChecked',

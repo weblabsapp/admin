@@ -1,5 +1,10 @@
 <template>
-  <DefaultField :field="field" :errors="errors" :show-help-text="showHelpText">
+  <DefaultField
+    :field="field"
+    :errors="errors"
+    :show-help-text="showHelpText"
+    :full-width-content="fullWidthContent"
+  >
     <template #field>
       <input
         :ref="field.attribute"
@@ -46,7 +51,7 @@ export default {
       const config = {
         appId: Nova.config('algoliaAppId'),
         apiKey: Nova.config('algoliaApiKey'),
-        container: this.$refs[this.field.attribute],
+        container: this.$refs[this.fieldAttribute],
         type: this.field.placeType ? this.field.placeType : 'address',
         templates: {
           value(suggestion) {

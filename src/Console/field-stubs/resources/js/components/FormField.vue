@@ -1,5 +1,10 @@
 <template>
-  <DefaultField :field="field" :errors="errors" :show-help-text="showHelpText">
+  <DefaultField
+    :field="field"
+    :errors="errors"
+    :show-help-text="showHelpText"
+    :full-width-content="fullWidthContent"
+  >
     <template #field>
       <input
         :id="field.attribute"
@@ -33,7 +38,7 @@ export default {
      * Fill the given FormData object with the field's internal value.
      */
     fill(formData) {
-      formData.append(this.field.attribute, this.value || '')
+      formData.append(this.fieldAttribute, this.value || '')
     },
   },
 }

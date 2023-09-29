@@ -6,7 +6,7 @@
       @submit.prevent="attempt"
       class="bg-white dark:bg-gray-800 shadow rounded-lg p-8 max-w-[25rem] mx-auto"
     >
-      <h2 class="text-2xl text-center font-normal mb-6 text-90">
+      <h2 class="text-2xl text-center font-normal mb-6">
         {{ __('Welcome Back!') }}
       </h2>
 
@@ -48,10 +48,12 @@
       </div>
 
       <div class="flex mb-6">
-        <label class="flex items-center block text-xl">
-          <input v-model="form.remember" type="checkbox" name="remember" />
-          <span class="text-base ml-2">{{ __('Remember me') }}</span>
-        </label>
+        <CheckboxWithLabel
+          :checked="form.remember"
+          @input="() => (form.remember = !form.remember)"
+        >
+          <span>{{ __('Remember me') }}</span>
+        </CheckboxWithLabel>
 
         <div
           v-if="supportsPasswordReset || forgotPasswordPath !== false"
@@ -69,20 +71,19 @@
             class="text-gray-500 font-bold no-underline"
             v-text="__('Forgot your password?')"
           />
-          <a
-            v-else
-            :href="forgotPasswordPath"
-            class="text-gray-500 font-bold no-underline"
-            v-text="__('Forgot your password?')"
-          />
         </div>
       </div>
 
-      <DefaultButton class="w-full flex justify-center" type="submit">
+      <LoadingButton
+        class="w-full flex justify-center"
+        type="submit"
+        :disabled="form.processing"
+        :loading="form.processing"
+      >
         <span>
           {{ __('Log In') }}
         </span>
-      </DefaultButton>
+      </LoadingButton>
     </form>
   </div>
 </template>
@@ -105,13 +106,21 @@ export default {
 
   methods: {
     async attempt() {
-      const { redirect } = await this.form.post(Nova.url('/login'))
+      try {
+        const { redirect } = await this.form.post(Nova.url('/login'))
 
-      if (redirect !== undefined && redirect !== null) {
-        window.location.href = redirect
+        let path = { url: Nova.url('/'), remote: true }
+
+        if (redirect !== undefined && redirect !== null) {
+          path = { url: redirect, remote: true }
+        }
+
+        Nova.visit(path)
+      } catch (error) {
+        if (error.response?.status === 500) {
+          Nova.error(this.__('There was a problem submitting the form.'))
+        }
       }
-
-      Nova.visit('/')
     },
   },
 

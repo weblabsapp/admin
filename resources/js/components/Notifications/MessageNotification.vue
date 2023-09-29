@@ -1,5 +1,8 @@
 <template>
-  <div class="bg-white dark:bg-gray-800 flex items-start py-4">
+  <div
+    class="bg-white dark:bg-gray-800 flex items-start py-4"
+    :dusk="`notification-${notification.id}`"
+  >
     <div class="flex-none pl-4">
       <Icon :type="icon" :class="notification.iconClass" />
     </div>
@@ -16,8 +19,9 @@
           <div class="ml-auto flex-shrink-0 space-x-1">
             <button
               type="button"
-              class="flex-none ml-auto hover:opacity-50 active:opacity-75"
               @click.prevent.stop="handleDeleteClick"
+              dusk="delete-button"
+              class="flex-none ml-auto hover:opacity-50 active:opacity-75 focus:outline-none focus:ring ring-primary-200 dark:ring-gray-600 rounded"
             >
               <Icon
                 type="trash"
@@ -28,8 +32,9 @@
 
             <button
               type="button"
-              class="flex-none ml-auto"
               @click.prevent.stop="$emit('mark-as-read')"
+              dusk="mark-as-read-button"
+              class="flex-none ml-auto hover:opacity-50 active:opacity-75 focus:outline-none focus:ring ring-primary-200 dark:ring-gray-600 rounded"
             >
               <Icon
                 type="eye"
@@ -74,14 +79,18 @@ export default {
     },
 
     handleDeleteClick() {
-      if (confirm('Are you sure you want to delete this notification?')) {
+      if (
+        confirm(this.__('Are you sure you want to delete this notification?'))
+      ) {
         this.$emit('delete-notification')
       }
     },
 
     visit() {
       if (this.hasUrl) {
-        return Nova.visit(this.notification.actionUrl)
+        return Nova.visit(this.notification.actionUrl, {
+          openInNewTab: this.notification.openInNewTab || false,
+        })
       }
     },
   },

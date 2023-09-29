@@ -1,5 +1,5 @@
 <template>
-  <div class="relative h-9 w-full md:w-1/3 md:flex-shrink-0 mb-6">
+  <div class="relative h-9 w-full md:w-1/3 md:flex-shrink-0">
     <Icon
       type="search"
       width="20"
@@ -10,7 +10,7 @@
     <RoundInput
       data-testid="search-input"
       dusk="search"
-      class="appearance-none g-white dark:bg-gray-800 shadow rounded-full h-8 w-full dark:focus:bg-gray-800"
+      class="appearance-none bg-white dark:bg-gray-800 shadow rounded-full h-8 w-full dark:focus:bg-gray-800"
       :placeholder="__('Search')"
       type="search"
       :value="keyword"

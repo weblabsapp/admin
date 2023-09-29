@@ -3,7 +3,7 @@
     <button
       v-if="filteredCards.length > 1"
       @click="toggleCollapse"
-      class="md:hidden h-8 py-3 mb-3 uppercase tracking-widest font-bold text-xs inline-flex items-center justify-center focus:outline-none focus:ring"
+      class="md:hidden h-8 py-3 mb-3 uppercase tracking-widest font-bold text-xs inline-flex items-center justify-center focus:outline-none focus:ring-primary-200 border-1 border-primary-500 focus:ring focus:ring-offset-4 focus:ring-offset-gray-100 dark:ring-gray-600 dark:focus:ring-offset-gray-900 rounded"
     >
       <span>{{ collapsed ? __('Show Cards') : __('Hide Cards') }}</span>
       <CollapseButton class="ml-1" :collapsed="collapsed" />
@@ -27,6 +27,7 @@
 <script>
 import filter from 'lodash/filter'
 import { Collapsable } from '@/mixins'
+import filled from '@/util/filled'
 
 export default {
   mixins: [Collapsable],
@@ -75,7 +76,15 @@ export default {
     },
 
     localStorageKey() {
-      return `nova.cards.${this.resource}.${this.size}.collapsed`
+      let name = this.resourceName
+
+      if (filled(this.lens)) {
+        name = `${name}.${this.lens}`
+      } else if (filled(this.resourceId)) {
+        name = `${name}.${this.resourceId}`
+      }
+
+      return `nova.cards.${name}.collapsed`
     },
   },
 }

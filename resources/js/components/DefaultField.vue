@@ -1,15 +1,15 @@
 <template>
-  <FieldWrapper :stacked="field.stacked" v-if="field.visible">
-    <div
-      class="px-8 mt-2 md:mt-0"
-      :class="field.stacked ? 'md:pt-5 w-full' : 'w-full md:w-1/5 md:py-5'"
-    >
+  <div v-if="field.visible" :class="fieldWrapperClasses">
+    <div v-if="field.withLabel" :class="labelClasses">
       <slot>
         <FormLabel
           :label-for="labelFor || field.uniqueKey"
-          :class="{ 'mb-2': showHelpText && field.helpText }"
+          class="space-x-1"
+          :class="{ 'mb-2': shouldShowHelpText }"
         >
-          {{ fieldLabel }}
+          <span>
+            {{ fieldLabel }}
+          </span>
           <span v-if="field.required" class="text-red-500 text-sm">
             {{ __('*') }}
           </span>
@@ -17,23 +17,20 @@
       </slot>
     </div>
 
-    <div
-      class="mt-1 md:mt-0 pb-5 px-8"
-      :class="field.stacked ? 'md:pt-5 w-full' : 'w-full md:w-3/5 md:py-5'"
-    >
+    <div :class="controlWrapperClasses">
       <slot name="field" />
 
-      <HelpText class="mt-2 help-text-error" v-if="showErrors && hasError">
+      <HelpText class="help-text-error" v-if="showErrors && hasError">
         {{ firstError }}
       </HelpText>
 
       <HelpText
-        class="help-text mt-2"
-        v-if="showHelpText"
+        class="help-text"
+        v-if="shouldShowHelpText"
         v-html="field.helpText"
       />
     </div>
-  </FieldWrapper>
+  </div>
 </template>
 
 <script>
@@ -52,6 +49,42 @@ export default {
   },
 
   computed: {
+    fieldWrapperClasses() {
+      // prettier-ignore
+      return [
+        'md:flex md:flex-row space-y-2 md:space-y-0',
+        this.field.withLabel && !this.field.inline && !this.field.compact && 'py-5',
+        this.field.withLabel && !this.field.inline && this.field.compact && 'py-3',
+        this.field.stacked && 'md:flex-col md:space-y-2',
+      ]
+    },
+
+    labelClasses() {
+      // prettier-ignore
+      return [
+        'w-full',
+        this.field.stacked && '',
+        !this.field.stacked && 'md:mt-2',
+        this.field.stacked && !this.field.inline && 'px-6 md:px-8',
+        !this.field.stacked && !this.field.inline && 'px-6 md:px-8',
+        this.field.compact && '!px-3 md:!px-6',
+        !this.field.stacked && !this.field.inline && 'md:w-1/5',
+      ]
+    },
+
+    controlWrapperClasses() {
+      // prettier-ignore
+      return [
+        'w-full space-y-2',
+        this.field.stacked && !this.field.inline && 'px-6 md:px-8',
+        !this.field.stacked && !this.field.inline && 'px-6 md:px-8',
+        this.field.compact && '!px-3 md:!px-4',
+         !this.field.stacked && !this.field.inline && !this.field.fullWidth && 'md:w-3/5',
+        this.field.stacked && !this.field.inline && !this.field.fullWidth && 'md:w-3/5',
+        !this.field.stacked && !this.field.inline && this.field.fullWidth && 'md:w-4/5',
+      ]
+    },
+
     /**
      * Return the label that should be used for the field.
      */
@@ -62,6 +95,13 @@ export default {
       }
 
       return this.fieldName || this.field.name || this.field.singularLabel
+    },
+
+    /**
+     * Determine help text should be shown.
+     */
+    shouldShowHelpText() {
+      return this.showHelpText && this.field.helpText?.length > 0
     },
   },
 }

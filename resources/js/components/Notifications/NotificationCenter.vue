@@ -4,7 +4,7 @@
       @click.stop="toggleNotifications"
       dusk="notifications-dropdown"
       type="button"
-      class="hover:opacity-50 focus:outline-none focus:ring rounded h-10 w-10"
+      class="hover:text-primary-500 focus:outline-none focus:ring ring-primary-200 dark:ring-gray-600 rounded h-10 w-10"
     >
       <Icon type="bell" />
 
@@ -19,7 +19,7 @@
     <div v-if="notificationsShown" class="fixed flex inset-0">
       <div
         @click="toggleNotifications"
-        class="absolute inset-0 bg-gray-600 opacity-75"
+        class="absolute inset-0 bg-gray-600 dark:bg-gray-900 opacity-75"
         dusk="notifications-backdrop"
       />
 
@@ -30,9 +30,9 @@
           v-if="notifications.length > 0"
           class="bg-white dark:bg-gray-800 flex items-center h-14 px-4"
         >
-          <Heading :level="3" class="ml-1">Notifications</Heading>
-          <LinkButton @click="markAllNotificationsAsRead" class="ml-auto"
-            >Mark all as Read
+          <Heading :level="3" class="ml-1">{{ __('Notifications') }}</Heading>
+          <LinkButton @click="markAllNotificationsAsRead" class="ml-auto">
+            {{ __('Mark all as Read') }}
           </LinkButton>
         </nav>
 
@@ -50,7 +50,7 @@
             <div
               class="border-l-4"
               :class="{
-                'border-white dark:border-gray-600': notification.read_at,
+                'border-white dark:border-gray-800': notification.read_at,
                 'border-red-500 dark:border-red-500': !notification.read_at,
               }"
             >
@@ -96,7 +96,8 @@
 </template>
 
 <script>
-import { mapMutations, mapActions, mapGetters } from 'vuex'
+import { createNamespacedHelpers } from 'vuex'
+const { mapMutations, mapActions, mapGetters } = createNamespacedHelpers('nova')
 
 export default {
   created() {

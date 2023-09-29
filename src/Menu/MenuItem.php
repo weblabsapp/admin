@@ -2,20 +2,25 @@
 
 namespace Laravel\Nova\Menu;
 
+use Illuminate\Support\Arr;
+use Illuminate\Support\Traits\Macroable;
 use InvalidArgumentException;
 use JsonSerializable;
 use Laravel\Nova\AuthorizedToSee;
-use Laravel\Nova\Dashboard;
 use Laravel\Nova\Makeable;
-use Laravel\Nova\Resource;
+use Laravel\Nova\Nova;
 use Laravel\Nova\URL;
+use Laravel\Nova\WithBadge;
 
 /**
  * @method static static make(string $name, string|null $path = null)
  */
 class MenuItem implements JsonSerializable
 {
-    use AuthorizedToSee, Makeable;
+    use AuthorizedToSee;
+    use Makeable;
+    use WithBadge;
+    use Macroable;
 
     /**
      * The menu's component.
@@ -67,6 +72,20 @@ class MenuItem implements JsonSerializable
     public $external = false;
 
     /**
+     * The target value for external link.
+     *
+     * @var string|null
+     */
+    public $target;
+
+    /**
+     * The active menu callback.
+     *
+     * @var (callable(\Illuminate\Http\Request, \Laravel\Nova\URL):bool)|bool|null
+     */
+    public $activeMenuCallback;
+
+    /**
      * Construct a new Menu Item instance.
      *
      * @param  string  $name
@@ -79,7 +98,7 @@ class MenuItem implements JsonSerializable
     }
 
     /**
-     * Create a menu from resource class.
+     * Create a menu item from a resource class.
      *
      * @param  class-string<\Laravel\Nova\Resource>  $resourceClass
      * @return static
@@ -89,8 +108,29 @@ class MenuItem implements JsonSerializable
         return static::make(
             $resourceClass::label()
         )->path('/resources/'.$resourceClass::uriKey())
+        ->activeWhen(function ($request, $url) {
+            return ! $request->routeIs('nova.pages.lens') ? $url->active() : false;
+        })
         ->canSee(function ($request) use ($resourceClass) {
             return $resourceClass::availableForNavigation($request) && $resourceClass::authorizedToViewAny($request);
+        });
+    }
+
+    /**
+     * Create a menu item from a lens class.
+     *
+     * @param  class-string<\Laravel\Nova\Resource>  $resourceClass
+     * @param  class-string<\Laravel\Nova\Lenses\Lens>  $lensClass
+     * @return static
+     */
+    public static function lens($resourceClass, $lensClass)
+    {
+        return with(new $lensClass, function ($lens) use ($resourceClass) {
+            return static::make($lens->name())
+                ->path('/resources/'.$resourceClass::uriKey().'/lens/'.$lens->uriKey())
+                ->canSee(function ($request) use ($lens) {
+                    return $lens->authorizedToSee($request);
+                });
         });
     }
 
@@ -162,10 +202,22 @@ class MenuItem implements JsonSerializable
     }
 
     /**
+     * Set the menu's target to open in a new tab.
+     *
+     * @return $this
+     */
+    public function openInNewTab()
+    {
+        $this->target = '_blank';
+
+        return $this;
+    }
+
+    /**
      * Set menu's method, and optionally data or headers.
      *
      * @param  string  $method
-     * @param  array<string, string>|null  $data
+     * @param  array<string, mixed>|null  $data
      * @param  array<string, string>|null  $headers
      * @return $this
      */
@@ -177,8 +229,24 @@ class MenuItem implements JsonSerializable
 
         $this->method = $method;
 
-        return $this->data($data)
-            ->headers($headers);
+        return $this->data($data)->headers($headers);
+    }
+
+    /**
+     * Set menu's method, and optionally data or headers. This request will be handled via Inertia.visit().
+     *
+     * @param  string  $method
+     * @param  array<string, mixed>|null  $data
+     * @param  array<string, string>|null  $headers
+     * @return static
+     */
+    public function inertia($method = 'GET', $data = null, $headers = null)
+    {
+        if ($method !== 'GET') {
+            $headers = Arr::wrap($headers);
+        }
+
+        return $this->method($method, $data, $headers);
     }
 
     /**
@@ -221,6 +289,34 @@ class MenuItem implements JsonSerializable
     }
 
     /**
+     * Determine the default active URL state.
+     *
+     * @param  (callable(\Illuminate\Http\Request, \Laravel\Nova\URL):bool)|bool  $activeMenuCallback
+     * @return $this
+     */
+    public function activeWhen($activeMenuCallback)
+    {
+        $this->activeMenuCallback = $activeMenuCallback;
+
+        return $this;
+    }
+
+    /**
+     * Determine the default active URL state.
+     *
+     * @param  (callable(\Illuminate\Http\Request, \Laravel\Nova\URL):bool)|bool  $activeMenuCallback
+     * @return $this
+     */
+    public function activeUnless($activeMenuCallback)
+    {
+        $this->activeMenuCallback = function ($request, $url) use ($activeMenuCallback) {
+            return value($activeMenuCallback, $request, $url) === false;
+        };
+
+        return $this;
+    }
+
+    /**
      * Prepare the menu for JSON serialization.
      *
      * @return array<string, mixed>
@@ -229,15 +325,21 @@ class MenuItem implements JsonSerializable
     {
         $url = URL::make($this->path, $this->external);
 
+        $activeMenuCallback = $this->activeMenuCallback ?? function ($request, $url) {
+            return $url->active();
+        };
+
         return [
-            'name' => $this->name,
+            'name' => Nova::__($this->name),
             'component' => $this->component,
             'path' => (string) $url,
             'external' => $this->external,
+            'target' => $this->target,
             'method' => $this->method,
             'data' => $this->data,
             'headers' => $this->headers,
-            'active' => $url->active(),
+            'active' => value($activeMenuCallback, request(), $url),
+            'badge' => $this->resolveBadge(),
         ];
     }
 }

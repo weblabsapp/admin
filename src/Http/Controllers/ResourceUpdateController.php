@@ -47,7 +47,7 @@ class ResourceUpdateController extends Controller
 
                 DB::transaction(function () use ($request, $model) {
                     Nova::usingActionEvent(function ($actionEvent) use ($request, $model) {
-                        $this->actionEvent = $actionEvent->forResourceUpdate($request->user(), $model);
+                        $this->actionEvent = $actionEvent->forResourceUpdate(Nova::user($request), $model);
                         $this->actionEvent->save();
                     });
                 });
@@ -63,9 +63,11 @@ class ResourceUpdateController extends Controller
                 return [$model, $resource];
             });
 
-            if (get_class($model) === Util::userModel() && $model->is($request->user())) {
-                $request->user()->refresh();
-            }
+            tap(Nova::user($request), function ($user) use ($model) {
+                if (get_class($model) === Util::userModel() && $model->is($user)) {
+                    $user->refresh();
+                }
+            });
 
             return response()->json([
                 'id' => $model->getKey(),
@@ -96,11 +98,11 @@ class ResourceUpdateController extends Controller
 
         $column = $model->getUpdatedAtColumn();
 
-        if (! $model->{$column}) {
+        if (! ($model->usesTimestamps() && $model->{$column})) {
             return false;
         }
 
-        return $request->input('_retrieved_at') && $model->usesTimestamps() && $model->{$column}->gt(
+        return $request->input('_retrieved_at') && $model->{$column}->gt(
             Carbon::createFromTimestamp($request->input('_retrieved_at'))
         );
     }

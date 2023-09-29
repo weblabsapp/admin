@@ -3,6 +3,7 @@
     :field="currentField"
     :errors="errors"
     :show-help-text="showHelpText"
+    :full-width-content="fullWidthContent"
   >
     <template #field>
       <div class="flex items-center">
@@ -17,7 +18,9 @@
           :class="errorClasses"
           :disabled="currentlyIsReadonly"
           @change="handleChange"
-          step="1"
+          :min="currentField.min"
+          :max="currentField.max"
+          :step="currentField.step"
         />
 
         <span class="ml-3">
@@ -32,6 +35,7 @@
 import isNil from 'lodash/isNil'
 import { DateTime } from 'luxon'
 import { DependentFormField, HandlesValidationErrors } from '@/mixins'
+import filled from '@/util/filled'
 
 export default {
   mixins: [HandlesValidationErrors, DependentFormField],
@@ -56,7 +60,7 @@ export default {
 
         this.formattedDate = [
           isoDate.toISODate(),
-          isoDate.toFormat('HH:mm:ss'),
+          isoDate.toFormat(this.timeFormat),
         ].join('T')
       }
     },
@@ -65,7 +69,16 @@ export default {
      * On save, populate our form data
      */
     fill(formData) {
-      formData.append(this.field.attribute, this.value || '')
+      this.fillIfVisible(formData, this.fieldAttribute, this.value || '')
+
+      if (this.currentlyIsVisible && filled(this.value)) {
+        let isoDate = DateTime.fromISO(this.value, { zone: this.timezone })
+
+        this.formattedDate = [
+          isoDate.toISODate(),
+          isoDate.toFormat(this.timeFormat),
+        ].join('T')
+      }
     },
 
     /**
@@ -78,29 +91,24 @@ export default {
         let isoDate = DateTime.fromISO(value, { zone: this.timezone })
 
         this.value = isoDate.setZone(Nova.config('timezone')).toString()
-        this.formattedDate = [
-          isoDate.toISODate(),
-          isoDate.toFormat('HH:mm:ss'),
-        ].join('T')
       } else {
         this.value = ''
-        this.formattedDate = ''
       }
 
       if (this.field) {
-        this.emitFieldValueChange(this.field.attribute, this.value)
+        this.emitFieldValueChange(this.fieldAttribute, this.value)
       }
     },
   },
 
   computed: {
+    timeFormat() {
+      return this.currentField.step % 60 === 0 ? 'HH:mm' : 'HH:mm:ss'
+    },
+
     timezone() {
       return Nova.config('userTimezone') || Nova.config('timezone')
     },
   },
-}
-
-function filled(value) {
-  return !isNil(value) && value !== ''
 }
 </script>

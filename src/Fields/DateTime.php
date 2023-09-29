@@ -2,12 +2,14 @@
 
 namespace Laravel\Nova\Fields;
 
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use Carbon\CarbonInterval;
 use DateTimeInterface;
 use Exception;
 use Illuminate\Support\Arr;
 use Laravel\Nova\Contracts\FilterableField;
-use Laravel\Nova\Fields\Filters\DateFilter;
+use Laravel\Nova\Fields\Filters\DateTimeFilter;
 use Laravel\Nova\Http\Requests\NovaRequest;
 
 class DateTime extends Field implements FilterableField
@@ -29,11 +31,32 @@ class DateTime extends Field implements FilterableField
     public $originalValue;
 
     /**
+     * The minimum value that can be assigned to the field.
+     *
+     * @var string|null
+     */
+    public $min;
+
+    /**
+     * The maximum value that can be assigned to the field.
+     *
+     * @var string|null
+     */
+    public $max;
+
+    /**
+     * The step size the field will increment and decrement by.
+     *
+     * @var int|null
+     */
+    public $step;
+
+    /**
      * Create a new field.
      *
      * @param  string  $name
      * @param  string|\Closure|callable|object|null  $attribute
-     * @param  (callable(mixed, mixed, ?string):mixed)|null  $resolveCallback
+     * @param  (callable(mixed, mixed, ?string):(mixed))|null  $resolveCallback
      * @return void
      */
     public function __construct($name, $attribute = null, callable $resolveCallback = null)
@@ -49,6 +72,53 @@ class DateTime extends Field implements FilterableField
                 throw new Exception("DateTime field must cast to 'datetime' in Eloquent model.");
             }
         });
+    }
+
+    /**
+     * The minimum value that can be assigned to the field.
+     *
+     * @param  \Carbon\CarbonInterface|string  $min
+     * @return $this
+     */
+    public function min($min)
+    {
+        if (is_string($min)) {
+            $min = Carbon::parse($min);
+        }
+
+        $this->min = $min->toDateTimeLocalString();
+
+        return $this;
+    }
+
+    /**
+     * The maximum value that can be assigned to the field.
+     *
+     * @param  \Carbon\CarbonInterface|string  $max
+     * @return $this
+     */
+    public function max($max)
+    {
+        if (is_string($max)) {
+            $max = Carbon::parse($max);
+        }
+
+        $this->max = $max->toDateTimeLocalString();
+
+        return $this;
+    }
+
+    /**
+     * The step size the field will increment and decrement by.
+     *
+     * @param  int|\Carbon\CarbonInterval  $step
+     * @return $this
+     */
+    public function step($step)
+    {
+        $this->step = $step instanceof CarbonInterval ? $step->totalSeconds : $step;
+
+        return $this;
     }
 
     /**
@@ -83,25 +153,13 @@ class DateTime extends Field implements FilterableField
         $this->usesCustomizedDisplay = true;
 
         if ($value instanceof DateTimeInterface) {
-            $this->originalValue = $value instanceof CarbonInterface
+            $this->value = $value instanceof CarbonInterface
                 ? $value->toIso8601String()
                 : $value->format(DateTimeInterface::ATOM);
         }
 
-        $this->value = call_user_func($this->displayCallback, $value, $resource, $attribute);
-    }
-
-    /**
-     * Prepare the field for JSON serialization.
-     *
-     * @return array<string, mixed>
-     */
-    public function jsonSerialize(): array
-    {
-        /* @phpstan-ignore-next-line */
-        return array_merge([
-            'originalValue' => $this->originalValue,
-        ], parent::jsonSerialize());
+        $this->originalValue = $this->value;
+        $this->displayedAs = call_user_func($this->displayCallback, $value, $resource, $attribute);
     }
 
     /**
@@ -112,7 +170,7 @@ class DateTime extends Field implements FilterableField
      */
     protected function makeFilter(NovaRequest $request)
     {
-        return new DateFilter($this);
+        return new DateTimeFilter($this);
     }
 
     /**
@@ -126,13 +184,12 @@ class DateTime extends Field implements FilterableField
             [$min, $max] = $value;
 
             if (! is_null($min) && ! is_null($max)) {
-                return $query->whereDate($attribute, '>=', $min)
-                    ->whereDate($attribute, '<=', $max);
+                return $query->whereBetween($attribute, [$min, $max]);
             } elseif (! is_null($min)) {
-                return $query->whereDate($attribute, '>=', $min);
+                return $query->where($attribute, '>=', $min);
             }
 
-            return $query->whereDate($attribute, '<=', $max);
+            return $query->where($attribute, '<=', $max);
         };
     }
 
@@ -153,5 +210,21 @@ class DateTime extends Field implements FilterableField
                 'extraAttributes',
             ]);
         });
+    }
+
+    /**
+     * Prepare the field for JSON serialization.
+     *
+     * @return array<string, mixed>
+     */
+    public function jsonSerialize(): array
+    {
+        return array_merge([
+            'originalValue' => $this->originalValue,
+        ], array_filter([
+            'min' => $this->min,
+            'max' => $this->max,
+            'step' => $this->step ?? 1,
+        ]), parent::jsonSerialize());
     }
 }

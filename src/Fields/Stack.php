@@ -19,14 +19,14 @@ class Stack extends Field
     /**
      * Indicates if the element should be shown on the creation view.
      *
-     * @var (callable(\Laravel\Nova\Http\Requests\NovaRequest):bool)|bool
+     * @var (callable(\Laravel\Nova\Http\Requests\NovaRequest):(bool))|bool
      */
     public $showOnCreation = false;
 
     /**
      * Indicates if the element should be shown on the update view.
      *
-     * @var (callable(\Laravel\Nova\Http\Requests\NovaRequest, mixed):bool)|bool
+     * @var (callable(\Laravel\Nova\Http\Requests\NovaRequest, mixed):(bool))|bool
      */
     public $showOnUpdate = false;
 
@@ -101,6 +101,16 @@ class Stack extends Field
 
             return $field->isShownOnDetail($request, $resource);
         })->values()->each->resolveForDisplay($resource, $attribute);
+    }
+
+    /**
+     * Get field lines.
+     *
+     * @return \Illuminate\Support\Collection
+     */
+    public function fields()
+    {
+        return collect($this->lines)->whereInstanceOf(Field::class);
     }
 
     /**

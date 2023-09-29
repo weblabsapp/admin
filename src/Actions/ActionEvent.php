@@ -85,7 +85,7 @@ class ActionEvent extends Model
             'model_id' => $model->getKey(),
             'fields' => '',
             'original' => null,
-            'changes' => $model->attributesToArray(),
+            'changes' => array_diff_key($model->attributesToArray(), array_flip($model->getHidden())),
             'status' => 'finished',
             'exception' => '',
         ]);
@@ -111,8 +111,12 @@ class ActionEvent extends Model
             'model_type' => $model->getMorphClass(),
             'model_id' => $model->getKey(),
             'fields' => '',
-            'original' => array_intersect_key($model->getRawOriginal(), $model->getDirty()),
-            'changes' => $model->getDirty(),
+            'changes' => static::hydrateChangesPayload(
+                $changes = array_diff_key($model->getDirty(), array_flip($model->getHidden()))
+            ),
+            'original' => static::hydrateChangesPayload(
+                array_intersect_key($model->newInstance()->setRawAttributes($model->getRawOriginal())->attributesToArray(), $changes)
+            ),
             'status' => 'finished',
             'exception' => '',
         ]);
@@ -130,7 +134,7 @@ class ActionEvent extends Model
     {
         return new static([
             'batch_id' => (string) Str::orderedUuid(),
-            'user_id' => $request->user()->getAuthIdentifier(),
+            'user_id' => Nova::user($request)->getAuthIdentifier(),
             'name' => 'Attach',
             'actionable_type' => $parent->getMorphClass(),
             'actionable_id' => $parent->getKey(),
@@ -140,7 +144,7 @@ class ActionEvent extends Model
             'model_id' => $pivot->getKey(),
             'fields' => '',
             'original' => null,
-            'changes' => $pivot->attributesToArray(),
+            'changes' => array_diff_key($pivot->attributesToArray(), $pivot->getHidden()),
             'status' => 'finished',
             'exception' => '',
         ]);
@@ -158,7 +162,7 @@ class ActionEvent extends Model
     {
         return new static([
             'batch_id' => (string) Str::orderedUuid(),
-            'user_id' => $request->user()->getAuthIdentifier(),
+            'user_id' => Nova::user($request)->getAuthIdentifier(),
             'name' => 'Update Attached',
             'actionable_type' => $parent->getMorphClass(),
             'actionable_id' => $parent->getKey(),
@@ -167,8 +171,12 @@ class ActionEvent extends Model
             'model_type' => $pivot->getMorphClass(),
             'model_id' => $pivot->getKey(),
             'fields' => '',
-            'original' => array_intersect_key($pivot->getRawOriginal(), $pivot->getDirty()),
-            'changes' => $pivot->getDirty(),
+            'changes' => static::hydrateChangesPayload(
+                $changes = array_diff_key($pivot->getDirty(), array_flip($pivot->getHidden()))
+            ),
+            'original' => static::hydrateChangesPayload(
+                array_intersect_key($pivot->newInstance()->setRawAttributes($pivot->getRawOriginal())->attributesToArray(), $changes)
+            ),
             'status' => 'finished',
             'exception' => '',
         ]);
@@ -278,7 +286,7 @@ class ActionEvent extends Model
      * @return void
      */
     public static function createForModels(ActionRequest $request, Action $action,
-                                           $batchId, Collection $models, $status = 'running')
+        $batchId, Collection $models, $status = 'running')
     {
         $models = $models->map(function ($model) use ($request, $action, $batchId, $status) {
             return array_merge(
@@ -308,7 +316,7 @@ class ActionEvent extends Model
      * @return array<string, mixed>
      */
     public static function defaultAttributes(ActionRequest $request, Action $action,
-                                             $batchId, $status = 'running')
+        $batchId, $status = 'running')
     {
         if ($request->isPivotAction()) {
             $pivotClass = $request->pivotRelation()->getPivotClass();
@@ -322,7 +330,7 @@ class ActionEvent extends Model
 
         return [
             'batch_id' => $batchId,
-            'user_id' => $request->user()->getAuthIdentifier(),
+            'user_id' => Nova::user($request)->getAuthIdentifier(),
             'name' => $action->name(),
             'actionable_type' => $request->actionableModel()->getMorphClass(),
             'target_type' => $request->model()->getMorphClass(),
@@ -455,5 +463,19 @@ class ActionEvent extends Model
     public function getTable()
     {
         return 'action_events';
+    }
+
+    /**
+     * Hydrate the changes payuload.
+     *
+     * @param  array  $attributes
+     * @return array
+     */
+    protected static function hydrateChangesPayload(array $attributes)
+    {
+        return collect($attributes)
+                ->transform(function ($value) {
+                    return Util::hydrate($value);
+                })->all();
     }
 }

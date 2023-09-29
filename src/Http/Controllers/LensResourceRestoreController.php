@@ -22,7 +22,7 @@ class LensResourceRestoreController extends Controller
 
                 Nova::usingActionEvent(function ($actionEvent) use ($model, $request) {
                     $actionEvent->insert(
-                        $actionEvent->forResourceRestore($request->user(), collect([$model]))
+                        $actionEvent->forResourceRestore(Nova::user($request), collect([$model]))
                             ->map->getAttributes()->all()
                     );
                 });

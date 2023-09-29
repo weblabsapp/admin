@@ -30,6 +30,7 @@ class ResourceStoreController extends Controller
      */
     public function __invoke(CreateResourceRequest $request)
     {
+        /** @var \Laravel\Nova\Resource $resource */
         $resource = $request->resource();
 
         $resource::authorizeToCreate($request);
@@ -48,7 +49,7 @@ class ResourceStoreController extends Controller
 
                 DB::transaction(function () use ($request, $model) {
                     Nova::usingActionEvent(function (ActionEvent $actionEvent) use ($request, $model) {
-                        $this->actionEvent = $actionEvent->forResourceCreate($request->user(), $model);
+                        $this->actionEvent = $actionEvent->forResourceCreate(Nova::user($request), $model);
                         $this->actionEvent->save();
                     });
                 });

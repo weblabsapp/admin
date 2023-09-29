@@ -1,12 +1,13 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full font-sans antialiased">
+<html lang="{{ $locale = \Laravel\Nova\Nova::resolveUserLocale(request()) }}" dir="{{ \Laravel\Nova\Nova::rtlEnabled() ? 'rtl' : 'ltr' }}" class="h-full font-sans antialiased">
 <head>
     <meta name="theme-color" content="#fff">
-
     <meta charset="utf-8">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="viewport" content="width=device-width"/>
-    <meta name="locale" content="{{ str_replace('_', '-', app()->getLocale()) }}"/>
+    <meta name="locale" content="{{ $locale }}"/>
+
+    @include('nova::partials.meta')
 
     <!-- Styles -->
     <link rel="stylesheet" href="{{ mix('app.css', 'vendor/nova') }}">

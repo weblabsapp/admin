@@ -12,8 +12,10 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 use JsonSerializable;
+use Laravel\Nova\Fields\HasAttachments;
 use Laravel\Nova\Fields\ID;
 use Laravel\Nova\Http\Requests\NovaRequest;
+use Laravel\Nova\Menu\MenuItem;
 use Laravel\Scout\Searchable;
 
 /**
@@ -25,19 +27,20 @@ use Laravel\Scout\Searchable;
  */
 abstract class Resource implements ArrayAccess, JsonSerializable, UrlRoutable
 {
-    use Authorizable,
-        ConditionallyLoadsAttributes,
-        DelegatesToResource,
-        FillsFields,
-        PerformsQueries,
-        PerformsValidation,
-        ResolvesActions,
-        ResolvesCards,
-        ResolvesFields,
-        ResolvesFilters,
-        ResolvesLenses,
-        SupportsPolling,
-        HasLifecycleMethods;
+    use Authorizable;
+    use ConditionallyLoadsAttributes;
+    use DelegatesToResource;
+    use FillsFields;
+    use Makeable;
+    use PerformsQueries;
+    use PerformsValidation;
+    use ResolvesActions;
+    use ResolvesCards;
+    use ResolvesFields;
+    use ResolvesFilters;
+    use ResolvesLenses;
+    use SupportsPolling;
+    use HasLifecycleMethods;
 
     /**
      * The default displayable pivot class name.
@@ -187,6 +190,14 @@ abstract class Resource implements ArrayAccess, JsonSerializable, UrlRoutable
     public static $debounce = 0.5;
 
     /**
+     * The click action to use when clicking on the resource in the table.
+     * Can be one of: 'detail' (default), 'edit', 'select', 'preview', or 'ignore'.
+     *
+     * @var string
+     */
+    public static $clickAction = 'detail';
+
+    /**
      * The callbacks to be called after saving an individual resource.
      *
      * @var array
@@ -199,7 +210,7 @@ abstract class Resource implements ArrayAccess, JsonSerializable, UrlRoutable
      * @param  TModel|null  $resource
      * @return void
      */
-    public function __construct($resource)
+    public function __construct($resource = null)
     {
         $this->resource = $resource;
     }
@@ -239,9 +250,14 @@ abstract class Resource implements ArrayAccess, JsonSerializable, UrlRoutable
 
         return new static($model->replicate(
             $this->deletableFields(resolve(NovaRequest::class))
-                    ->map(function ($field) {
-                        return $field->attribute;
-                    })->all()
+                ->reject(function ($field) {
+                    $uses = trait_uses_recursive($field);
+
+                    /** @phpstan-ignore-next-line */
+                    return isset($uses[HasAttachments::class]) && $field->withFiles === false;
+                })
+                ->pluck('attribute')
+                ->all()
         ));
     }
 
@@ -278,7 +294,8 @@ abstract class Resource implements ArrayAccess, JsonSerializable, UrlRoutable
         }
 
         return static::$softDeletes[static::$model] = in_array(
-            SoftDeletes::class, class_uses_recursive(static::newModel())
+            SoftDeletes::class,
+            class_uses_recursive(static::newModel())
         );
     }
 
@@ -372,7 +389,7 @@ abstract class Resource implements ArrayAccess, JsonSerializable, UrlRoutable
      */
     public static function createButtonLabel()
     {
-        return __('Create :resource', ['resource' => static::singularLabel()]);
+        return Nova::__('Create :resource', ['resource' => static::singularLabel()]);
     }
 
     /**
@@ -382,7 +399,7 @@ abstract class Resource implements ArrayAccess, JsonSerializable, UrlRoutable
      */
     public static function updateButtonLabel()
     {
-        return __('Update :resource', ['resource' => static::singularLabel()]);
+        return Nova::__('Update :resource', ['resource' => static::singularLabel()]);
     }
 
     /**
@@ -460,6 +477,7 @@ abstract class Resource implements ArrayAccess, JsonSerializable, UrlRoutable
             'authorizedToRestore' => static::softDeletes() && $this->authorizedToRestore($request),
             'authorizedToForceDelete' => static::softDeletes() && $this->authorizedToForceDelete($request),
             'authorizedToImpersonate' => $this->authorizedToImpersonate($request),
+            'previewHasFields' => $this->previewFieldsCount($request) > 0,
             'softDeletes' => static::softDeletes(),
             'softDeleted' => $this->isSoftDeleted(),
         ]);
@@ -503,6 +521,20 @@ abstract class Resource implements ArrayAccess, JsonSerializable, UrlRoutable
     }
 
     /**
+     * Prepare the resource for JSON serialization.
+     *
+     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
+     * @return array<string, mixed>
+     */
+    public function serializeForPeeking(NovaRequest $request)
+    {
+        return array_merge($this->serializeWithId($this->peekableFields($request)), [
+            'title' => $this->title(),
+            'softDeleted' => $this->isSoftDeleted(),
+        ]);
+    }
+
+    /**
      * Determine if the resource may be updated, factoring in attachments.
      *
      * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
@@ -512,7 +544,8 @@ abstract class Resource implements ArrayAccess, JsonSerializable, UrlRoutable
     {
         if ($request->viaManyToMany()) {
             return $request->findParentResourceOrFail()->authorizedToAttach(
-                $request, $this->model()
+                $request,
+                $this->model()
             );
         }
 
@@ -529,7 +562,9 @@ abstract class Resource implements ArrayAccess, JsonSerializable, UrlRoutable
     {
         if ($request->viaManyToMany()) {
             return $request->findParentResourceOrFail()->authorizedToDetach(
-                $request, $this->model(), $request->viaRelationship
+                $request,
+                $this->model(),
+                $request->viaRelationship
             );
         }
 
@@ -645,5 +680,16 @@ abstract class Resource implements ArrayAccess, JsonSerializable, UrlRoutable
     public static function tableStyle()
     {
         return static::$tableStyle;
+    }
+
+    /**
+     * Return the menu item that should represent the resource.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Laravel\Nova\Menu\MenuItem
+     */
+    public function menu(Request $request)
+    {
+        return MenuItem::resource(static::class);
     }
 }

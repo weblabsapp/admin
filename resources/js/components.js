@@ -1,5 +1,5 @@
-import upperFirst from 'lodash/upperFirst'
 import camelCase from 'lodash/camelCase'
+import upperFirst from 'lodash/upperFirst'
 import CustomError404 from '@/views/CustomError404'
 import CustomError403 from '@/views/CustomError403'
 import CustomAppError from '@/views/CustomAppError'

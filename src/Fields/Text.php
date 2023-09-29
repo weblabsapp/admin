@@ -9,7 +9,12 @@ use Laravel\Nova\Http\Requests\NovaRequest;
 
 class Text extends Field implements FilterableField
 {
-    use FieldFilterable, SupportsDependentFields;
+    use AsHTML;
+    use Copyable;
+    use FieldFilterable;
+    use HasSuggestions;
+    use SupportsDependentFields;
+    use SupportsMaxlength;
 
     /**
      * The field's component.
@@ -19,90 +24,8 @@ class Text extends Field implements FilterableField
     public $component = 'text-field';
 
     /**
-     * The field's suggestions callback.
-     *
-     * @var array|callable
-     */
-    public $suggestions;
-
-    /**
-     * Indicates if the field value should be displayed as HTML.
-     *
-     * @var bool
-     */
-    public $asHtml = false;
-
-    /**
-     * Indicates if the field value is copyable inside Nova.
-     *
-     * @var bool
-     */
-    public $copyable = false;
-
-    /**
-     * Set the callback or array to be used to determine the field's suggestions list.
-     *
-     * @param  array|callable  $suggestions
-     * @return $this
-     */
-    public function suggestions($suggestions)
-    {
-        $this->suggestions = $suggestions;
-
-        return $this;
-    }
-
-    /**
-     * Resolve the display suggestions for the field.
-     *
-     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
-     * @return array
-     */
-    public function resolveSuggestions(NovaRequest $request)
-    {
-        if (is_callable($this->suggestions)) {
-            return call_user_func($this->suggestions, $request) ?? null;
-        }
-
-        return $this->suggestions;
-    }
-
-    /**
-     * Display the field as raw HTML using Vue.
-     *
-     * @return $this
-     */
-    public function asHtml()
-    {
-        if ($this->copyable) {
-            throw new \Exception("The `asHtml` option is not available on fields set to `copyable`. Please remove the `copyable` method from the {$this->name} field to enable `asHtml`.");
-        }
-
-        $this->asHtml = true;
-
-        return $this;
-    }
-
-    /**
-     * Allow the field to be copyable to the clipboard inside Nova.
-     *
-     * @return $this
-     */
-    public function copyable()
-    {
-        if ($this->asHtml) {
-            throw new \Exception("The `copyable` option is not available on fields displayed as HTML. Please remove the `asHtml` method from the {$this->name} field to enable `copyable`.");
-        }
-
-        $this->copyable = true;
-
-        return $this;
-    }
-
-    /**
      * Make the field filter.
      *
-     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
      * @return \Laravel\Nova\Fields\Filters\Filter
      */
     protected function makeFilter(NovaRequest $request)
@@ -145,11 +68,7 @@ class Text extends Field implements FilterableField
     {
         $request = app(NovaRequest::class);
 
-        if (
-            $request->isCreateOrAttachRequest()
-            || $request->isUpdateOrUpdateAttachedRequest()
-            || $request->isActionRequest() === true
-        ) {
+        if ($request->isFormRequest()) {
             return array_merge(parent::jsonSerialize(), [
                 'suggestions' => $this->resolveSuggestions($request),
             ]);
