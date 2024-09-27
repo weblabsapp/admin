@@ -10,7 +10,7 @@
     @trix-attachment-remove="handleRemoveFile"
     @trix-file-accept="handleFileAccept"
     :placeholder="placeholder"
-    class="trix-content"
+    class="trix-content prose !max-w-full prose-sm dark:prose-invert"
   />
   <input type="hidden" :name="name" :id="uid" :value="value" />
 </template>
@@ -37,19 +37,22 @@ export default {
 
   data: () => ({
     uid: uid(),
+    loading: true,
   }),
 
   methods: {
     initialize() {
-      this.$refs.theEditor.editor.insertHTML(this.value)
-
       if (this.disabled) {
         this.$refs.theEditor.setAttribute('contenteditable', false)
       }
+
+      this.loading = false
     },
 
     handleChange() {
-      this.$emit('change', this.$refs.theEditor.value)
+      if (!this.loading) {
+        this.$emit('change', this.$refs.theEditor.value)
+      }
     },
 
     handleFileAccept(e) {

@@ -3,21 +3,24 @@
     :field="currentField"
     :errors="errors"
     :show-help-text="showHelpText"
+    :full-width-content="fullWidthContent"
   >
     <template #field>
       <!-- Search Input -->
       <SearchInput
         v-if="!currentlyIsReadonly && isSearchable"
-        :data-testid="`${field.attribute}-search-input`"
+        :dusk="`${field.attribute}-search-input`"
         @input="performSearch"
         @clear="clearSelection"
         @selected="selectOption"
-        :error="hasError"
+        :has-error="hasError"
         :value="selectedOption"
         :data="filteredOptions"
         :clearable="currentField.nullable"
         trackBy="value"
         class="w-full"
+        :mode="mode"
+        :disabled="currentlyIsReadonly"
       >
         <!-- The Selected Option Slot -->
         <div v-if="selectedOption" class="flex items-center">
@@ -27,7 +30,7 @@
         <template #option="{ selected, option }">
           <!-- Options List Slot -->
           <div
-            class="flex items-center text-sm font-semibold leading-5 text-90"
+            class="flex items-center text-sm font-semibold leading-5"
             :class="{ 'text-white': selected }"
           >
             {{ option.label }}
@@ -43,7 +46,7 @@
         v-model:selected="value"
         @change="handleChange"
         class="w-full"
-        :select-classes="{ 'form-input-border-error': hasError }"
+        :has-error="hasError"
         :options="currentField.options"
         :disabled="currentlyIsReadonly"
       >
@@ -60,6 +63,7 @@ import find from 'lodash/find'
 import first from 'lodash/first'
 import isNil from 'lodash/isNil'
 import { DependentFormField, HandlesValidationErrors } from '@/mixins'
+import filled from '@/util/filled'
 
 export default {
   mixins: [HandlesValidationErrors, DependentFormField],
@@ -67,11 +71,10 @@ export default {
   data: () => ({
     search: '',
     selectedOption: null,
-    value: null,
   }),
 
   created() {
-    if (this.field.value) {
+    if (filled(this.field.value)) {
       let selectedOption = find(
         this.field.options,
         v => v.value == this.field.value
@@ -85,6 +88,13 @@ export default {
 
   methods: {
     /**
+     * Return the field default value.
+     */
+    fieldDefaultValue() {
+      return null
+    },
+
+    /**
      * Provide a function that fills a passed FormData object with the
      * field's internal value attribute. Here we are forcing there to be a
      * value sent to the server instead of the default behavior of
@@ -92,7 +102,7 @@ export default {
      * are truthy or falsey
      */
     fill(formData) {
-      formData.append(this.field.attribute, this.value ?? '')
+      this.fillIfVisible(formData, this.fieldAttribute, this.value ?? '')
     },
 
     /**
@@ -106,11 +116,11 @@ export default {
      * Clear the current selection for the field.
      */
     clearSelection() {
-      this.selectedOption = ''
-      this.value = ''
+      this.selectedOption = null
+      this.value = this.fieldDefaultValue()
 
       if (this.field) {
-        this.emitFieldValueChange(this.field.attribute, this.value)
+        this.emitFieldValueChange(this.fieldAttribute, this.value)
       }
     },
 
@@ -127,7 +137,7 @@ export default {
       this.value = option.value
 
       if (this.field) {
-        this.emitFieldValueChange(this.field.attribute, this.value)
+        this.emitFieldValueChange(this.fieldAttribute, this.value)
       }
     },
 
@@ -148,27 +158,37 @@ export default {
      */
     onSyncedField() {
       let currentSelectedOption = null
+      let hasValue = false
 
       if (this.selectedOption) {
+        hasValue = true
         currentSelectedOption = find(
           this.currentField.options,
-          v => v.value == this.selectedOption.value
+          v => v.value === this.selectedOption.value
         )
       }
 
-      if (!currentSelectedOption) {
+      let selectedOption = find(
+        this.currentField.options,
+        v => v.value == this.currentField.value
+      )
+
+      if (isNil(currentSelectedOption)) {
         this.clearSelection()
 
         if (this.currentField.value) {
-          let selectedOption = find(
-            this.currentField.options,
-            v => v.value == this.currentField.value
-          )
-
           this.selectOption(selectedOption)
-        } else if (!this.currentField.nullable) {
+        } else if (hasValue && !this.currentField.nullable) {
           this.selectOption(first(this.currentField.options))
         }
+
+        return
+      } else if (
+        currentSelectedOption &&
+        selectedOption &&
+        ['create', 'attach'].includes(this.editMode)
+      ) {
+        this.selectOption(selectedOption)
 
         return
       }
@@ -189,9 +209,12 @@ export default {
      * Return the field options filtered by the search string.
      */
     filteredOptions() {
-      return this.field.options.filter(option => {
+      return this.currentField.options.filter(option => {
         return (
-          option.label.toLowerCase().indexOf(this.search.toLowerCase()) > -1
+          option.label
+            .toString()
+            .toLowerCase()
+            .indexOf(this.search.toLowerCase()) > -1
         )
       })
     },
@@ -204,7 +227,7 @@ export default {
     },
 
     /**
-     * Return value has been setted.
+     * Determine if the field has a non-empty value.
      */
     hasValue() {
       return Boolean(

@@ -2,6 +2,8 @@
 
 namespace Laravel\Nova\Fields;
 
+use Laravel\Nova\Exceptions\NovaException;
+
 class URL extends Text
 {
     /**
@@ -12,18 +14,11 @@ class URL extends Text
     public $component = 'url-field';
 
     /**
-     * The text used for the link.
-     *
-     * @var string
-     */
-    public $displayedAs;
-
-    /**
      * Create a new field.
      *
      * @param  string  $name
      * @param  string|\Closure|callable|object|null  $attribute
-     * @param  (callable(mixed, mixed, ?string):mixed)|null  $resolveCallback
+     * @param  (callable(mixed, mixed, ?string):(mixed))|null  $resolveCallback
      * @return void
      */
     public function __construct($name, $attribute = null, callable $resolveCallback = null)
@@ -31,19 +26,6 @@ class URL extends Text
         parent::__construct($name, $attribute, $resolveCallback);
 
         $this->textAlign(Field::CENTER_ALIGN);
-    }
-
-    /**
-     * Define the callback that should be used to display the field's value.
-     *
-     * @param  callable(mixed, mixed, string):mixed  $displayCallback
-     * @return $this
-     */
-    public function displayUsing(callable $displayCallback)
-    {
-        $this->displayCallback = $displayCallback;
-
-        return $this;
     }
 
     /**
@@ -61,28 +43,12 @@ class URL extends Text
     }
 
     /**
-     * Resolve the field's value using the display callback.
+     * Allow the field to be copyable to the clipboard inside Nova.
      *
-     * @param  mixed  $value
-     * @param  mixed  $resource
-     * @param  string  $attribute
-     * @return void
+     * @return $this
      */
-    protected function resolveUsingDisplayCallback($value, $resource, $attribute)
+    public function copyable()
     {
-        $this->value = $value;
-        $this->displayedAs = call_user_func($this->displayCallback, $value, $resource, $attribute);
-    }
-
-    /**
-     * Prepare the field for JSON serialization.
-     *
-     * @return array<string, mixed>
-     */
-    public function jsonSerialize(): array
-    {
-        return array_merge([
-            'displayedAs' => $this->displayedAs,
-        ], parent::jsonSerialize());
+        throw NovaException::helperNotSupported(__METHOD__, __CLASS__);
     }
 }

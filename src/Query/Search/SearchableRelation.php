@@ -37,7 +37,7 @@ class SearchableRelation extends Column
     public function __invoke($query, $search, string $connectionType, string $whereOperator = 'orWhere')
     {
         return $query->{$whereOperator.'Has'}($this->relation, function ($query) use ($search, $connectionType) {
-            return (new Column($this->column))->__invoke(
+            return Column::from($this->column)->__invoke(
                 $query, $search, $connectionType, 'where'
             );
         });

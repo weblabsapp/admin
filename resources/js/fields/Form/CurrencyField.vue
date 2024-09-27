@@ -3,6 +3,7 @@
     :field="currentField"
     :errors="errors"
     :show-help-text="showHelpText"
+    :full-width-content="fullWidthContent"
   >
     <template #field>
       <div class="flex flex-wrap items-stretch w-full relative">
@@ -15,7 +16,7 @@
         </div>
 
         <input
-          class="flex-shrink flex-grow flex-auto leading-normal w-px flex-1 rounded-l-none form-control form-input form-input-bordered"
+          class="flex-shrink flex-grow flex-auto leading-normal w-px flex-1 rounded-l-none form-control form-input form-control-bordered"
           :id="currentField.uniqueKey"
           :dusk="field.attribute"
           v-bind="extraAttributes"

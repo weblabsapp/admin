@@ -3,6 +3,7 @@
 namespace Laravel\Nova\Testing\Browser\Pages;
 
 use Laravel\Dusk\Browser;
+use Laravel\Nova\Testing\Browser\Components\Modals\CreateRelationModalComponent;
 
 class Update extends Page
 {
@@ -32,21 +33,6 @@ class Update extends Page
     }
 
     /**
-     * Get the URL for the page.
-     *
-     * @param  bool  $withQueryString
-     * @return string
-     */
-    public function url()
-    {
-        if ($this->queryParams) {
-            return $this->novaPageUrl.'?'.http_build_query($this->queryParams);
-        }
-
-        return $this->novaPageUrl;
-    }
-
-    /**
      * Run the inline create relation.
      *
      * @param  \Laravel\Dusk\Browser  $browser
@@ -60,10 +46,10 @@ class Update extends Page
     {
         $browser->whenAvailable("@{$uriKey}-inline-create", function ($browser) use ($fieldCallback) {
             $browser->click('')
-                ->elsewhereWhenAvailable('.modal[data-modal-open=true]', function ($browser) use ($fieldCallback) {
+                ->elsewhereWhenAvailable(new CreateRelationModalComponent(), function ($browser) use ($fieldCallback) {
                     $fieldCallback($browser);
 
-                    $browser->create()->pause(250);
+                    $browser->confirm()->pause(250);
                 });
         });
     }
@@ -78,9 +64,10 @@ class Update extends Page
      */
     public function update(Browser $browser)
     {
-        $browser->waitFor('@update-button')
-                ->click('@update-button')
-                ->pause(500);
+        $browser->dismissToasted()
+            ->waitFor('@update-button')
+            ->click('@update-button')
+            ->pause(500);
     }
 
     /**
@@ -93,9 +80,22 @@ class Update extends Page
      */
     public function updateAndContinueEditing(Browser $browser)
     {
-        $browser->waitFor('@update-and-continue-editing-button')
-                ->click('@update-and-continue-editing-button')
-                ->pause(500);
+        $browser->dismissToasted()
+            ->waitFor('@update-and-continue-editing-button')
+            ->click('@update-and-continue-editing-button')
+            ->pause(500);
+    }
+
+    /**
+     * Click the cancel button.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @return void
+     */
+    public function cancel(Browser $browser)
+    {
+        $browser->dismissToasted()
+            ->click('@cancel-update-button');
     }
 
     /**

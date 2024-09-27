@@ -1,8 +1,9 @@
 <template>
   <span
-    class="whitespace-nowrap px-2 py-1 rounded-full uppercase text-xs font-bold"
+    class="inline-flex items-center whitespace-nowrap min-h-6 px-2 rounded-full uppercase text-xs font-bold"
     :class="extraClasses"
   >
+    <slot name="icon" />
     <slot>
       {{ label }}
     </slot>

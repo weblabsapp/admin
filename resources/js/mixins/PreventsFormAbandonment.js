@@ -1,5 +1,6 @@
 import { mapGetters, mapMutations } from 'vuex'
 import { Inertia } from '@inertiajs/inertia'
+import filled from '../util/filled'
 
 export default {
   created() {
@@ -35,28 +36,42 @@ export default {
 
   unmounted() {
     this.removeOnNavigationChangesEvent()
+    this.resetPushState()
   },
 
   data() {
     return {
       removeOnNavigationChangesEvent: null,
       removeOnBeforeUnloadEvent: null,
+      navigateBackUsingHistory: true,
     }
   },
 
   methods: {
-    ...mapMutations(['allowLeavingForm', 'preventLeavingForm']),
+    ...mapMutations([
+      'allowLeavingForm',
+      'preventLeavingForm',
+      'triggerPushState',
+      'resetPushState',
+    ]),
 
     /**
      * Prevent accidental abandonment only if form was changed.
      */
     updateFormStatus() {
-      if (this.canLeaveForm == true) {
-        Inertia.pushState(Inertia.page)
-        Inertia.ignoreHistoryState = true
+      if (this.canLeaveForm === true) {
+        this.triggerPushState()
       }
 
       this.preventLeavingForm()
+    },
+
+    enableNavigateBackUsingHistory() {
+      this.navigateBackUsingHistory = false
+    },
+
+    disableNavigateBackUsingHistory() {
+      this.navigateBackUsingHistory = false
     },
 
     handlePreventFormAbandonment(proceed, revert) {
@@ -106,8 +121,7 @@ export default {
           this.allowLeavingForm()
         },
         () => {
-          Inertia.pushState(Inertia.page)
-          Inertia.ignoreHistoryState = true
+          this.triggerPushState()
         }
       )
     },
@@ -118,7 +132,7 @@ export default {
 
       this.removeOnBeforeUnloadEvent()
 
-      if (!this.canLeaveForm) {
+      if (!this.canLeaveFormToPreviousPage && this.navigateBackUsingHistory) {
         window.history.back()
       }
     },
@@ -129,9 +143,19 @@ export default {
 
       this.removeOnBeforeUnloadEvent()
     },
+
+    proceedToPreviousPage(url) {
+      if (this.navigateBackUsingHistory && window.history.length > 1) {
+        window.history.back()
+      } else if (!this.navigateBackUsingHistory && filled(url)) {
+        Nova.visit(url, { replace: true })
+      } else {
+        Nova.visit('/')
+      }
+    },
   },
 
   computed: {
-    ...mapGetters(['canLeaveForm']),
+    ...mapGetters(['canLeaveForm', 'canLeaveFormToPreviousPage']),
   },
 }

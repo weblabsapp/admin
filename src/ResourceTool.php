@@ -8,9 +8,11 @@ use Illuminate\Support\Str;
 /**
  * @method static static make()
  */
+#[\AllowDynamicProperties]
 class ResourceTool extends Panel
 {
-    use Makeable, ProxiesCanSeeToGate;
+    use Makeable;
+    use ProxiesCanSeeToGate;
 
     /**
      * The resource tool element.

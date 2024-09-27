@@ -2,8 +2,13 @@
 
 namespace Laravel\Nova\Fields;
 
+use Laravel\Nova\Http\Requests\NovaRequest;
+
 class Color extends Field
 {
+    use HasSuggestions;
+    use SupportsDependentFields;
+
     /**
      * The field's component.
      *
@@ -17,4 +22,22 @@ class Color extends Field
      * @var string
      */
     public $textAlign = 'center';
+
+    /**
+     * Prepare the element for JSON serialization.
+     *
+     * @return array<string, mixed>
+     */
+    public function jsonSerialize(): array
+    {
+        $request = app(NovaRequest::class);
+
+        if ($request->isFormRequest()) {
+            return array_merge(parent::jsonSerialize(), [
+                'suggestions' => $this->resolveSuggestions($request),
+            ]);
+        }
+
+        return parent::jsonSerialize();
+    }
 }

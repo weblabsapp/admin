@@ -9,11 +9,32 @@ use Laravel\Nova\Http\Requests\NovaRequest;
 class Number extends Text
 {
     /**
+     * The minimum value that can be assigned to the field.
+     *
+     * @var mixed
+     */
+    public $min;
+
+    /**
+     * The maximum value that can be assigned to the field.
+     *
+     * @var mixed
+     */
+    public $max;
+
+    /**
+     * The step size the field will increment and decrement by.
+     *
+     * @var mixed
+     */
+    public $step;
+
+    /**
      * Create a new field.
      *
      * @param  string  $name
      * @param  string|\Closure|callable|object|null  $attribute
-     * @param  (callable(mixed, mixed, ?string):mixed)|null  $resolveCallback
+     * @param  (callable(mixed, mixed, ?string):(mixed))|null  $resolveCallback
      * @return void
      */
     public function __construct($name, $attribute = null, callable $resolveCallback = null)
@@ -21,7 +42,10 @@ class Number extends Text
         parent::__construct($name, $attribute, $resolveCallback);
 
         $this->textAlign(Field::RIGHT_ALIGN)
-            ->withMeta(['type' => 'number']);
+            ->withMeta(['type' => 'number'])
+            ->displayUsing(function ($value) {
+                return ! $this->isValidNullValue($value) ? (string) $value : null;
+            });
     }
 
     /**
@@ -32,7 +56,9 @@ class Number extends Text
      */
     public function min($min)
     {
-        return $this->withMeta(['min' => $min]);
+        $this->min = $min;
+
+        return $this;
     }
 
     /**
@@ -43,7 +69,9 @@ class Number extends Text
      */
     public function max($max)
     {
-        return $this->withMeta(['max' => $max]);
+        $this->max = $max;
+
+        return $this;
     }
 
     /**
@@ -54,7 +82,9 @@ class Number extends Text
      */
     public function step($step)
     {
-        return $this->withMeta(['step' => $step]);
+        $this->step = $step;
+
+        return $this;
     }
 
     /**
@@ -109,5 +139,21 @@ class Number extends Text
                 'extraAttributes',
             ]);
         });
+    }
+
+    /**
+     * Prepare the element for JSON serialization.
+     *
+     * @return array<string, mixed>
+     */
+    public function jsonSerialize(): array
+    {
+        return array_merge(parent::jsonSerialize(), collect([
+            'min' => $this->min,
+            'max' => $this->max,
+            'step' => $this->step,
+        ])->reject(function ($value) {
+            return is_null($value) || (empty($value) && $value !== 0);
+        })->all());
     }
 }

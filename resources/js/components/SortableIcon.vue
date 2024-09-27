@@ -2,7 +2,7 @@
   <button
     type="button"
     @click.prevent="handleClick"
-    class="cursor-pointer inline-flex items-center"
+    class="cursor-pointer inline-flex items-center focus:outline-none focus:ring ring-primary-200 dark:ring-gray-600 rounded"
     :dusk="'sort-' + uriKey"
     :aria-sort="ariaSort"
   >
@@ -13,7 +13,7 @@
     </span>
 
     <svg
-      class="ml-2 flex-shrink-0"
+      class="ml-2 shrink-0"
       xmlns="http://www.w3.org/2000/svg"
       width="8"
       height="14"
@@ -32,21 +32,23 @@
 </template>
 
 <script>
-import { RouteParameters } from '@/mixins'
+import { InteractsWithQueryString } from '@/mixins'
 
 export default {
   emits: ['sort', 'reset'],
 
-  mixins: [RouteParameters],
+  mixins: [InteractsWithQueryString],
 
   props: {
     resourceName: String,
     uriKey: String,
   },
 
+  inject: ['orderByParameter', 'orderByDirectionParameter'],
+
   methods: {
     /**
-     * Handle the clicke event.
+     * Handle the click event.
      */
     handleClick() {
       if (this.isSorted && this.isDescDirection) {
@@ -111,28 +113,28 @@ export default {
      * The current order query parameter for this resource
      */
     sortKey() {
-      return `${this.resourceName}_order`
+      return this.orderByParameter
     },
 
     /**
      * The current order query parameter value
      */
     sortColumn() {
-      return this.route.params[this.sortKey]
+      return this.queryStringParams[this.sortKey]
     },
 
     /**
      * The current direction query parameter for this resource
      */
     directionKey() {
-      return `${this.resourceName}_direction`
+      return this.orderByDirectionParameter
     },
 
     /**
      * The current direction query parameter value
      */
     direction() {
-      return this.route.params[this.directionKey]
+      return this.queryStringParams[this.directionKey]
     },
 
     /**

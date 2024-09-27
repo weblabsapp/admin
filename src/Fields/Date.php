@@ -2,7 +2,9 @@
 
 namespace Laravel\Nova\Fields;
 
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use Carbon\CarbonInterval;
 use DateTimeInterface;
 use Exception;
 use Illuminate\Support\Arr;
@@ -12,7 +14,8 @@ use Laravel\Nova\Http\Requests\NovaRequest;
 
 class Date extends Field implements FilterableField
 {
-    use FieldFilterable, SupportsDependentFields;
+    use FieldFilterable;
+    use SupportsDependentFields;
 
     /**
      * The field's component.
@@ -22,11 +25,32 @@ class Date extends Field implements FilterableField
     public $component = 'date-field';
 
     /**
+     * The minimum value that can be assigned to the field.
+     *
+     * @var string|null
+     */
+    public $min;
+
+    /**
+     * The maximum value that can be assigned to the field.
+     *
+     * @var string|null
+     */
+    public $max;
+
+    /**
+     * The step size the field will increment and decrement by.
+     *
+     * @var string|int|null
+     */
+    public $step;
+
+    /**
      * Create a new field.
      *
      * @param  string  $name
      * @param  string|\Closure|callable|object|null  $attribute
-     * @param  (callable(mixed, mixed, ?string):mixed)|null  $resolveCallback
+     * @param  (callable(mixed, mixed, ?string):(mixed))|null  $resolveCallback
      * @return void
      */
     public function __construct($name, $attribute = null, callable $resolveCallback = null)
@@ -35,8 +59,8 @@ class Date extends Field implements FilterableField
             if (! is_null($value)) {
                 if ($value instanceof DateTimeInterface) {
                     return $value instanceof CarbonInterface
-                                ? $value->toIso8601String()
-                                : $value->format(DateTimeInterface::ATOM);
+                                ? $value->toDateString()
+                                : $value->format('Y-m-d');
                 }
 
                 throw new Exception("Date field must cast to 'date' in Eloquent model.");
@@ -45,19 +69,66 @@ class Date extends Field implements FilterableField
     }
 
     /**
+     * The minimum value that can be assigned to the field.
+     *
+     * @param  \Carbon\CarbonInterface|string  $min
+     * @return $this
+     */
+    public function min($min)
+    {
+        if (is_string($min)) {
+            $min = Carbon::parse($min);
+        }
+
+        $this->min = $min->toDateString();
+
+        return $this;
+    }
+
+    /**
+     * The maximum value that can be assigned to the field.
+     *
+     * @param  \Carbon\CarbonInterface|string  $max
+     * @return $this
+     */
+    public function max($max)
+    {
+        if (is_string($max)) {
+            $max = Carbon::parse($max);
+        }
+
+        $this->max = $max->toDateString();
+
+        return $this;
+    }
+
+    /**
+     * The step size the field will increment and decrement by.
+     *
+     * @param  string|int|\Carbon\CarbonInterval  $step
+     * @return $this
+     */
+    public function step($step)
+    {
+        $this->step = $step instanceof CarbonInterval ? $step->totalDays : $step;
+
+        return $this;
+    }
+
+    /**
      * Resolve the default value for the field.
      *
-     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
-     * @return string
+     * @return string|null
      */
-    protected function resolveDefaultValue(NovaRequest $request)
+    public function resolveDefaultValue(NovaRequest $request)
     {
+        /** @var \DateTimeInterface|string|null $value */
         $value = parent::resolveDefaultValue($request);
 
         if ($value instanceof DateTimeInterface) {
             return $value instanceof CarbonInterface
-                        ? $value->toIso8601String()
-                        : $value->format(DateTimeInterface::ATOM);
+                        ? $value->toDateString()
+                        : $value->format('Y-m-d');
         }
 
         return $value;
@@ -66,7 +137,6 @@ class Date extends Field implements FilterableField
     /**
      * Make the field filter.
      *
-     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
      * @return \Laravel\Nova\Fields\Filters\Filter
      */
     protected function makeFilter(NovaRequest $request)
@@ -85,13 +155,12 @@ class Date extends Field implements FilterableField
             [$min, $max] = $value;
 
             if (! is_null($min) && ! is_null($max)) {
-                return $query->whereDate($attribute, '>=', $min)
-                             ->whereDate($attribute, '<=', $max);
+                return $query->whereBetween($attribute, [$min, $max]);
             } elseif (! is_null($min)) {
-                return $query->whereDate($attribute, '>=', $min);
+                return $query->where($attribute, '>=', $min);
             }
 
-            return $query->whereDate($attribute, '<=', $max);
+            return $query->where($attribute, '<=', $max);
         };
     }
 
@@ -112,5 +181,19 @@ class Date extends Field implements FilterableField
                 'extraAttributes',
             ]);
         });
+    }
+
+    /**
+     * Prepare the element for JSON serialization.
+     *
+     * @return array<string, mixed>
+     */
+    public function jsonSerialize(): array
+    {
+        return array_merge(parent::jsonSerialize(), array_filter([
+            'min' => $this->min,
+            'max' => $this->max,
+            'step' => $this->step ?? 'any',
+        ]));
     }
 }

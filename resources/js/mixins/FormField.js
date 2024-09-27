@@ -1,30 +1,38 @@
 import get from 'lodash/get'
-import isNil from 'lodash/isNil'
 import { mapProps } from './propTypes'
 import FormEvents from './FormEvents'
 
 export default {
   extends: FormEvents,
+
   props: {
     ...mapProps([
+      'nested',
       'shownViaNewRelationModal',
       'field',
       'viaResource',
       'viaResourceId',
       'viaRelationship',
       'resourceName',
+      'resourceId',
       'showHelpText',
+      'mode',
     ]),
-    formUniqueId: {
-      type: String,
-    },
   },
 
-  data: () => ({ value: '' }),
+  emits: ['field-changed'],
+
+  data() {
+    return {
+      value: this.fieldDefaultValue(),
+    }
+  },
+
+  created() {
+    this.setInitialValue()
+  },
 
   mounted() {
-    this.setInitialValue()
-
     // Add a default fill method for the field
     this.field.fill = this.fill
 
@@ -45,7 +53,14 @@ export default {
         this.field.value === undefined || this.field.value === null
       )
         ? this.field.value
-        : ''
+        : this.fieldDefaultValue()
+    },
+
+    /**
+     * Return the field default value.
+     */
+    fieldDefaultValue() {
+      return ''
     },
 
     /**
@@ -53,7 +68,16 @@ export default {
      * field's internal value attribute
      */
     fill(formData) {
-      formData.append(this.field.attribute, String(this.value))
+      this.fillIfVisible(formData, this.fieldAttribute, String(this.value))
+    },
+
+    /**
+     * Provide a function to fills FormData when field is visible.
+     */
+    fillIfVisible(formData, attribute, value) {
+      if (this.isVisible) {
+        formData.append(attribute, value)
+      }
     },
 
     /**
@@ -63,8 +87,16 @@ export default {
       this.value = event.target.value
 
       if (this.field) {
-        this.emitFieldValueChange(this.field.attribute, this.value)
+        this.emitFieldValueChange(this.fieldAttribute, this.value)
+        this.$emit('field-changed')
       }
+    },
+
+    /**
+     * Clean up any side-effects when removing this field dynamically (Repeater).
+     */
+    beforeRemove() {
+      //
     },
 
     listenToValueChanges(value) {
@@ -74,12 +106,47 @@ export default {
 
   computed: {
     /**
+     * Determine the current field.
+     */
+    currentField() {
+      return this.field
+    },
+
+    /**
+     * Determine if the field should use all the available white-space.
+     */
+    fullWidthContent() {
+      return this.currentField.fullWidth || this.field.fullWidth
+    },
+
+    /**
+     * Return the placeholder text for the field.
+     */
+    placeholder() {
+      return this.currentField.placeholder || this.field.name
+    },
+
+    /**
+     * Determine if the field is in visible mode
+     */
+    isVisible() {
+      return this.field.visible
+    },
+
+    /**
      * Determine if the field is in readonly mode
      */
     isReadonly() {
       return Boolean(
         this.field.readonly || get(this.field, 'extraAttributes.readonly')
       )
+    },
+
+    /**
+     * Determine if the field is accessed from Action
+     */
+    isActionRequest() {
+      return ['action-fullscreen', 'action-modal'].includes(this.mode)
     },
   },
 }

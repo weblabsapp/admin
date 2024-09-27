@@ -1,9 +1,9 @@
 <template>
   <div :class="`text-${field.textAlign}`">
     <span
-      v-if="field.value"
+      v-if="fieldHasValue || usesCustomizedDisplay"
       class="whitespace-nowrap"
-      :title="field.originalValue"
+      :title="field.value"
     >
       {{ formattedDate }}
     </span>
@@ -13,18 +13,17 @@
 
 <script>
 import { DateTime } from 'luxon'
+import { FieldValue } from '@/mixins'
 
 export default {
+  mixins: [FieldValue],
+
   props: ['resourceName', 'field'],
 
   computed: {
-    timezone() {
-      return Nova.config('userTimezone') || Nova.config('timezone')
-    },
-
     formattedDate() {
-      if (this.field.usesCustomizedDisplay) {
-        return this.field.value
+      if (this.usesCustomizedDisplay) {
+        return this.field.displayedAs
       }
 
       return DateTime.fromISO(this.field.value)
@@ -37,6 +36,10 @@ export default {
           minute: '2-digit',
           timeZoneName: 'short',
         })
+    },
+
+    timezone() {
+      return Nova.config('userTimezone') || Nova.config('timezone')
     },
   },
 }

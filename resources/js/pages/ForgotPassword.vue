@@ -6,7 +6,7 @@
       @submit.prevent="attempt"
       class="bg-white dark:bg-gray-800 shadow rounded-lg p-8 w-[25rem] mx-auto"
     >
-      <h2 class="text-2xl text-center font-normal mb-6 text-90">
+      <h2 class="text-2xl text-center font-normal mb-6">
         {{ __('Forgot your password?') }}
       </h2>
 
@@ -16,8 +16,8 @@
         <label class="block mb-2" for="email">{{ __('Email Address') }}</label>
         <input
           v-model="form.email"
-          class="form-control form-input form-input-bordered w-full"
-          :class="{ 'form-input-border-error': form.errors.has('email') }"
+          class="form-control form-input form-control-bordered w-full"
+          :class="{ 'form-control-bordered-error': form.errors.has('email') }"
           id="email"
           type="email"
           name="email"
@@ -30,18 +30,27 @@
         </HelpText>
       </div>
 
-      <DefaultButton class="w-full flex justify-center" type="submit">
+      <Button
+        class="w-full flex justify-center"
+        type="submit"
+        :loading="form.processing"
+      >
         {{ __('Send Password Reset Link') }}
-      </DefaultButton>
+      </Button>
     </form>
   </LoadingView>
 </template>
 
 <script>
 import Auth from '@/layouts/Auth'
+import { Button } from 'laravel-nova-ui'
 
 export default {
   layout: Auth,
+
+  components: {
+    Button,
+  },
 
   data: () => ({
     form: Nova.form({
@@ -52,8 +61,17 @@ export default {
   methods: {
     async attempt() {
       const { message } = await this.form.post(Nova.url('/password/email'))
-      Nova.success(message)
-      Nova.redirectToLogin()
+
+      Nova.$toasted.show(message, {
+        action: {
+          onClick: () => Nova.redirectToLogin(),
+          text: this.__('Reload'),
+        },
+        duration: null,
+        type: 'success',
+      })
+
+      setTimeout(() => Nova.redirectToLogin(), 5000)
     },
   },
 

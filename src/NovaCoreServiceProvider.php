@@ -7,6 +7,7 @@ use Illuminate\Auth\Events\Logout;
 use Illuminate\Container\Container;
 use Illuminate\Contracts\Http\Kernel as HttpKernel;
 use Illuminate\Foundation\Http\Events\RequestHandled;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Nova\Auth\Adapters\SessionImpersonator;
@@ -97,8 +98,10 @@ class NovaCoreServiceProvider extends ServiceProvider
 
             $event->listen(RequestReceived::class, function ($event) {
                 Nova::flushState();
-                // @phpstan-ignore-next-line
-                Cache::getInstance()->flush();
+                /** @phpstan-ignore-next-line */
+                if (class_exists(Cache::class)) {
+                    Cache::getInstance()->flush();
+                }
 
                 $event->sandbox->forgetInstance(ImpersonatesUsers::class);
             });
@@ -150,6 +153,7 @@ class NovaCoreServiceProvider extends ServiceProvider
             'as' => 'nova.api.',
             'prefix' => 'nova-api',
             'middleware' => 'nova:api',
+            'excluded_middleware' => [SubstituteBindings::class],
         ];
     }
 

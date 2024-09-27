@@ -6,7 +6,7 @@
           `${filter.name} - ${__('From')}`
         }}</span>
         <input
-          class="flex w-full form-control form-input form-input-bordered"
+          class="flex w-full form-control form-input form-control-bordered"
           ref="startField"
           v-model="startValue"
           :dusk="`${field.uniqueKey}-range-start`"
@@ -19,7 +19,7 @@
           `${filter.name} - ${__('To')}`
         }}</span>
         <input
-          class="flex w-full form-control form-input form-input-bordered"
+          class="flex w-full form-control form-input form-control-bordered"
           ref="endField"
           v-model="endValue"
           :dusk="`${field.uniqueKey}-range-end`"
@@ -31,9 +31,10 @@
 </template>
 
 <script>
+import { DateTime } from 'luxon'
 import debounce from 'lodash/debounce'
-import isNil from 'lodash/isNil'
 import omit from 'lodash/omit'
+import filled from '@/util/filled'
 
 export default {
   emits: ['change'],
@@ -83,29 +84,43 @@ export default {
     setCurrentFilterValue() {
       let [startValue, endValue] = this.filter.currentValue || [null, null]
 
-      this.startValue = startValue
-      this.endValue = endValue
+      this.startValue = filled(startValue)
+        ? this.fromDateTimeISO(startValue).toISODate()
+        : null
+      this.endValue = filled(endValue)
+        ? this.fromDateTimeISO(endValue).toISODate()
+        : null
     },
 
     validateFilter(startValue, endValue) {
-      startValue = filled(startValue) ? startValue : null
-      endValue = filled(endValue) ? endValue : null
+      startValue = filled(startValue)
+        ? this.toDateTimeISO(startValue, 'start')
+        : null
+      endValue = filled(endValue) ? this.toDateTimeISO(endValue, 'end') : null
 
       return [startValue, endValue]
     },
 
     handleChange() {
-      this.$store.commit(`${this.resourceName}/updateFilterState`, {
+      this.$emit('change', {
         filterClass: this.filterKey,
         value: this.validateFilter(this.startValue, this.endValue),
       })
-
-      this.$emit('change')
     },
 
     handleFilterReset() {
       this.$refs.startField.value = ''
       this.$refs.endField.value = ''
+
+      this.setCurrentFilterValue()
+    },
+
+    fromDateTimeISO(value) {
+      return DateTime.fromISO(value)
+    },
+
+    toDateTimeISO(value, range) {
+      return DateTime.fromISO(value).toISODate()
     },
   },
 
@@ -146,9 +161,5 @@ export default {
       }
     },
   },
-}
-
-function filled(value) {
-  return !isNil(value) && value !== ''
 }
 </script>

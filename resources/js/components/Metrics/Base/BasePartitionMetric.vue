@@ -10,8 +10,13 @@
 
     <HelpTextTooltip :text="helpText" :width="helpWidth" />
 
-    <div class="min-h-[90px]">
-      <div class="overflow-hidden overflow-y-auto max-h-[90px]">
+    <div class="flex min-h-[90px]">
+      <div
+        class="flex-1 overflow-hidden overflow-y-auto"
+        :class="{
+          'max-h-[90px]': legendsHeight === 'fixed',
+        }"
+      >
         <ul>
           <li
             v-for="item in formattedItems"
@@ -30,20 +35,15 @@
 
       <div
         ref="chart"
-        :class="chartClasses"
-        style="
-          width: 90px;
-          height: 90px;
-          right: 20px;
-          bottom: 30px;
-          top: calc(50% + 15px);
-        "
+        class="flex-none rounded-b-lg ct-chart mr-4 w-[90px] h-[90px]"
+        :class="{ invisible: this.currentTotal <= 0 }"
       />
     </div>
   </LoadingCard>
 </template>
 
 <script>
+import debounce from 'lodash/debounce'
 import map from 'lodash/map'
 import sumBy from 'lodash/sumBy'
 import Chartist from 'chartist'
@@ -72,14 +72,28 @@ export default {
     helpText: {},
     helpWidth: {},
     chartData: Array,
+    legendsHeight: { type: String, default: 'fixed' },
   },
 
-  data: () => ({ chartist: null }),
+  data: () => ({
+    chartist: null,
+    resizeObserver: null,
+  }),
 
   watch: {
     chartData: function (newData, oldData) {
       this.renderChart()
     },
+  },
+
+  created() {
+    const debouncer = debounce(callback => callback(), Nova.config('debounce'))
+
+    this.resizeObserver = new ResizeObserver(entries => {
+      debouncer(() => {
+        this.renderChart()
+      })
+    })
   },
 
   mounted() {
@@ -102,6 +116,12 @@ export default {
         })
       }
     })
+
+    this.resizeObserver.observe(this.$refs.chart)
+  },
+
+  beforeUnmount() {
+    this.resizeObserver.unobserve(this.$refs.chart)
   },
 
   methods: {
@@ -116,13 +136,7 @@ export default {
 
   computed: {
     chartClasses() {
-      return [
-        'vertical-center',
-        'rounded-b-lg',
-        'ct-chart',
-        'mr-4',
-        this.currentTotal <= 0 ? 'invisible' : '',
-      ]
+      return []
     },
 
     formattedChartData() {

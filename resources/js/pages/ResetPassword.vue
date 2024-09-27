@@ -6,7 +6,7 @@
       @submit.prevent="attempt"
       class="bg-white dark:bg-gray-800 shadow rounded-lg p-8 w-[25rem] mx-auto"
     >
-      <h2 class="text-2xl text-center font-normal mb-6 text-90">
+      <h2 class="text-2xl text-center font-normal mb-6">
         {{ __('Reset Password') }}
       </h2>
 
@@ -16,8 +16,8 @@
         <label class="block mb-2" for="email">{{ __('Email Address') }}</label>
         <input
           v-model="form.email"
-          class="form-control form-input form-input-bordered w-full"
-          :class="{ 'form-input-border-error': form.errors.has('email') }"
+          class="form-control form-input form-control-bordered w-full"
+          :class="{ 'form-control-bordered-error': form.errors.has('email') }"
           id="email"
           type="email"
           name="email"
@@ -34,8 +34,10 @@
         <label class="block mb-2" for="password">{{ __('Password') }}</label>
         <input
           v-model="form.password"
-          class="form-control form-input form-input-bordered w-full"
-          :class="{ 'form-input-border-error': form.errors.has('password') }"
+          class="form-control form-input form-control-bordered w-full"
+          :class="{
+            'form-control-bordered-error': form.errors.has('password'),
+          }"
           id="password"
           type="password"
           name="password"
@@ -53,9 +55,11 @@
         }}</label>
         <input
           v-model="form.password_confirmation"
-          class="form-control form-input form-input-bordered w-full"
+          class="form-control form-input form-control-bordered w-full"
           :class="{
-            'form-input-border-error': form.errors.has('password_confirmation'),
+            'form-control-bordered-error': form.errors.has(
+              'password_confirmation'
+            ),
           }"
           id="password_confirmation"
           type="password"
@@ -71,9 +75,13 @@
         </HelpText>
       </div>
 
-      <DefaultButton class="w-full flex justify-center" type="submit">
+      <Button
+        class="w-full flex justify-center"
+        type="submit"
+        :loading="form.processing"
+      >
         {{ __('Reset Password') }}
-      </DefaultButton>
+      </Button>
     </form>
   </div>
 </template>
@@ -81,16 +89,21 @@
 <script>
 import Cookies from 'js-cookie'
 import Auth from '@/layouts/Auth'
+import { Button } from 'laravel-nova-ui'
 
 export default {
   layout: Auth,
 
-  props: ['token'],
+  components: {
+    Button,
+  },
+
+  props: ['email', 'token'],
 
   data() {
     return {
       form: Nova.form({
-        email: '',
+        email: this.email,
         password: '',
         password_confirmation: '',
         token: this.token,
@@ -101,10 +114,20 @@ export default {
   methods: {
     async attempt() {
       const { message } = await this.form.post(Nova.url('/password/reset'))
-      Nova.success(message)
+      const redirect = { url: Nova.url('/'), remote: true }
+
       Cookies.set('token', Math.random().toString(36), { expires: 365 })
 
-      Nova.visit('/')
+      Nova.$toasted.show(message, {
+        action: {
+          onClick: () => Nova.visit(redirect),
+          text: this.__('Reload'),
+        },
+        duration: null,
+        type: 'success',
+      })
+
+      setTimeout(() => Nova.visit(redirect), 5000)
     },
   },
 }

@@ -38,7 +38,7 @@ class SearchableMorphToRelation extends SearchableRelation
     public function __invoke($query, $search, string $connectionType, string $whereOperator = 'orWhere')
     {
         return $query->{$whereOperator.'HasMorph'}($this->relation, $this->morphTypes(), function ($query) use ($search, $connectionType) {
-            return (new Column($this->column))->__invoke(
+            return Column::from($this->column)->__invoke(
                 $query, $search, $connectionType, 'where'
             );
         });

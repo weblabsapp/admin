@@ -3,11 +3,12 @@
     :field="currentField"
     :errors="errors"
     :show-help-text="showHelpText"
+    :full-width-content="fullWidthContent"
   >
     <template #field>
       <input
         v-bind="extraAttributes"
-        class="w-full form-control form-input form-input-bordered"
+        class="w-full form-control form-input form-control-bordered"
         type="url"
         @input="handleChange"
         :value="value"

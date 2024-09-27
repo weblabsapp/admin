@@ -2,10 +2,9 @@
 
 namespace Laravel\Nova\Metrics;
 
-use BackedEnum;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Query\Expression;
 use Illuminate\Support\Facades\DB;
+use Laravel\Nova\Util;
 
 abstract class Partition extends Metric
 {
@@ -102,11 +101,7 @@ abstract class Partition extends Metric
     {
         $query = $model instanceof Builder ? $model : (new $model)->newQuery();
 
-        $wrappedColumn = $column instanceof Expression
-                ? (string) $column
-                : $query->getQuery()->getGrammar()->wrap(
-                    $column ?? $query->getModel()->getQualifiedKeyName()
-                );
+        $wrappedColumn = $query->getQuery()->getGrammar()->wrap($column ?? $query->getModel()->getQualifiedKeyName());
 
         $results = $query->select(
             $groupBy, DB::raw("{$function}({$wrappedColumn}) as aggregate")
@@ -124,19 +119,19 @@ abstract class Partition extends Metric
      *
      * @param  \Illuminate\Database\Eloquent\Model  $result
      * @param  string  $groupBy
-     * @return array
+     * @return array<string|int, int|float>
      */
     protected function formatAggregateResult($result, $groupBy)
     {
         $key = with($result->{last(explode('.', $groupBy))}, function ($key) {
-            if ($key instanceof BackedEnum) {
-                return $key->value;
-            }
-
-            return $key;
+            return Util::value($key);
         });
 
-        return [$key => $result->aggregate];
+        if (! is_int($key)) {
+            $key = (string) $key;
+        }
+
+        return [$key => $result->aggregate ?? 0];
     }
 
     /**

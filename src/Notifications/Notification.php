@@ -18,7 +18,18 @@ class Notification extends Model
 
     public $casts = [
         'data' => 'array',
+        'read_at' => 'datetime',
     ];
+
+    /**
+     * Return the notifiable relationship.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\MorphTo
+     */
+    public function notifiable()
+    {
+        return $this->morphTo();
+    }
 
     /**
      * Scope the given query by unread notifications.

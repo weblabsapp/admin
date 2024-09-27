@@ -2,20 +2,28 @@
 
 namespace Laravel\Nova\Menu;
 
-use Illuminate\Support\Collection;
+use Illuminate\Support\Traits\Macroable;
 use JsonSerializable;
 use Laravel\Nova\AuthorizedToSee;
-use Laravel\Nova\Dashboard;
+use Laravel\Nova\Exceptions\NovaException;
+use Laravel\Nova\Fields\Collapsable;
 use Laravel\Nova\Http\Requests\NovaRequest;
 use Laravel\Nova\Makeable;
 use Laravel\Nova\URL;
+use Laravel\Nova\WithBadge;
+use Laravel\Nova\WithIcon;
 
 /**
  * @method static static make(string $name, array|iterable $items = [], string $icon = 'collection')
  */
 class MenuSection implements JsonSerializable
 {
-    use AuthorizedToSee, Makeable;
+    use AuthorizedToSee;
+    use Collapsable;
+    use Macroable;
+    use Makeable;
+    use WithBadge;
+    use WithIcon;
 
     /**
      * The menu's component.
@@ -34,23 +42,9 @@ class MenuSection implements JsonSerializable
     /**
      * The menu's items.
      *
-     * @var \Illuminate\Support\Collection
+     * @var \Laravel\Nova\Menu\MenuCollection
      */
     public $items;
-
-    /**
-     * The menu's collapsable state.
-     *
-     * @var bool
-     */
-    public $collapsable = false;
-
-    /**
-     * the menu's icon.
-     *
-     * @var string
-     */
-    public $icon;
 
     /**
      * The menu's path.
@@ -69,8 +63,8 @@ class MenuSection implements JsonSerializable
     public function __construct($name, $items = [], $icon = 'collection')
     {
         $this->name = $name;
-        $this->items = collect($items);
-        $this->icon = $icon;
+        $this->items = new MenuCollection($items);
+        $this->withIcon($icon);
     }
 
     /**
@@ -92,6 +86,40 @@ class MenuSection implements JsonSerializable
     }
 
     /**
+     * Create a menu section from a resource class.
+     *
+     * @param  class-string<\Laravel\Nova\Resource>  $resourceClass
+     * @return static
+     */
+    public static function resource($resourceClass)
+    {
+        return static::make(
+            $resourceClass::label()
+        )->path('/resources/'.$resourceClass::uriKey())
+        ->canSee(function ($request) use ($resourceClass) {
+            return $resourceClass::availableForNavigation($request) && $resourceClass::authorizedToViewAny($request);
+        });
+    }
+
+    /**
+     * Create a menu section from a lens class.
+     *
+     * @param  class-string<\Laravel\Nova\Resource>  $resourceClass
+     * @param  class-string<\Laravel\Nova\Lenses\Lens>  $lensClass
+     * @return static
+     */
+    public static function lens($resourceClass, $lensClass)
+    {
+        return with(new $lensClass, function ($lens) use ($resourceClass) {
+            return static::make($lens->name())
+                ->path('/resources/'.$resourceClass::uriKey().'/lens/'.$lens->uriKey())
+                ->canSee(function ($request) use ($lens) {
+                    return $lens->authorizedToSee($request);
+                });
+        });
+    }
+
+    /**
      * Set path to the menu.
      *
      * @param  string  $path
@@ -100,7 +128,10 @@ class MenuSection implements JsonSerializable
     public function path($path)
     {
         $this->path = $path;
-        $this->collapsable = false;
+
+        if ($this->collapsable) {
+            throw new NovaException('Link menu sections cannot also be collapsable.');
+        }
 
         return $this;
     }
@@ -113,19 +144,12 @@ class MenuSection implements JsonSerializable
     public function collapsable()
     {
         $this->collapsable = true;
-        $this->path = null;
+
+        if ($this->path) {
+            throw new NovaException('Link menu sections cannot also be collapsable.');
+        }
 
         return $this;
-    }
-
-    /**
-     * Set the menu section as collapsable.
-     *
-     * @return $this
-     */
-    public function collapsible()
-    {
-        return $this->collapsable();
     }
 
     /**
@@ -152,16 +176,16 @@ class MenuSection implements JsonSerializable
         $url = ! empty($this->path) ? URL::make($this->path) : null;
 
         return [
+            'active' => optional($url)->active() ?? false,
+            'badge' => $this->resolveBadge(),
+            'collapsable' => $this->collapsable,
+            'collapsedByDefault' => $this->collapsedByDefault,
+            'component' => $this->component,
+            'icon' => $this->icon,
+            'items' => $this->items->authorized($request)->withoutEmptyItems()->all(),
             'key' => md5($this->name.'-'.$this->path),
             'name' => $this->name,
-            'component' => 'menu-section',
-            'items' => $this->items->reject(function ($item) use ($request) {
-                return method_exists($item, 'authorizedToSee') && ! $item->authorizedToSee($request);
-            })->values(),
-            'collapsable' => $this->collapsable,
-            'icon' => $this->icon,
             'path' => (string) $url,
-            'active' => optional($url)->active() ?? false,
         ];
     }
 }

@@ -1,6 +1,7 @@
 <template>
   <CreateForm
     @resource-created="handleResourceCreated"
+    @resource-created-and-adding-another="handleResourceCreatedAndAddingAnother"
     @create-cancelled="handleCreateCancelled"
     :mode="mode"
     :resource-name="resourceName"
@@ -8,7 +9,8 @@
     :via-resource-id="viaResourceId"
     :via-relationship="viaRelationship"
     @update-form-status="onUpdateFormStatus"
-    :should-override-meta="mode == 'form' ? true : false"
+    @finished-loading="$emit('finished-loading')"
+    :should-override-meta="mode === 'form'"
     :form-unique-id="formUniqueId"
   />
 </template>
@@ -22,9 +24,15 @@ import {
 import { uid } from 'uid/single'
 
 export default {
-  emits: ['refresh', 'create-cancelled'],
+  emits: ['refresh', 'create-cancelled', 'finished-loading'],
 
   mixins: [PreventsFormAbandonment, PreventsModalAbandonment],
+
+  provide() {
+    return {
+      removeFile: this.removeFile,
+    }
+  },
 
   props: {
     mode: {
@@ -54,18 +62,29 @@ export default {
         resourceId: id,
       })
 
-      if (this.mode == 'form') {
+      if (this.mode === 'form') {
         return Nova.visit(redirect)
       }
 
       return this.$emit('refresh', { redirect, id })
     },
 
+    handleResourceCreatedAndAddingAnother() {
+      this.disableNavigateBackUsingHistory()
+    },
+
     handleCreateCancelled() {
-      if (this.mode == 'form') {
+      if (this.mode === 'form') {
         this.handleProceedingToPreviousPage()
         this.allowLeavingForm()
-        return window.history.back()
+
+        this.proceedToPreviousPage(
+          this.isRelation
+            ? `/resources/${this.viaResource}/${this.viaResourceId}`
+            : `/resources/${this.resourceName}`
+        )
+
+        return
       }
 
       this.allowLeavingModal()
@@ -76,7 +95,17 @@ export default {
      * Prevent accidental abandonment only if form was changed.
      */
     onUpdateFormStatus() {
-      this.mode == 'form' ? this.updateFormStatus() : this.updateModalStatus()
+      this.mode === 'form' ? this.updateFormStatus() : this.updateModalStatus()
+    },
+
+    removeFile(attribute) {
+      //
+    },
+  },
+
+  computed: {
+    isRelation() {
+      return Boolean(this.viaResourceId && this.viaRelationship)
     },
   },
 }

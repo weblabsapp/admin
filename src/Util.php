@@ -2,8 +2,10 @@
 
 namespace Laravel\Nova;
 
+use BackedEnum;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Stringable;
 
 class Util
 {
@@ -50,11 +52,51 @@ class Util
      */
     public static function safeInt($value)
     {
-        if (is_int($value) && $value >= 9007199254740991) {
+        $jsonMaxInt = 9007199254740991;
+
+        if (is_int($value) && $value >= $jsonMaxInt) {
             return (string) $value;
+        } elseif (filter_var($value, FILTER_VALIDATE_INT) && $value < $jsonMaxInt) {
+            return (int) $value;
         }
 
         return $value;
+    }
+
+    /**
+     * Hydrate the value to scalar (array, string, int etc...).
+     *
+     * @param  mixed  $value
+     * @return scalar
+     */
+    public static function hydrate($value)
+    {
+        if ($value instanceof BackedEnum) {
+            return $value->value;
+        } elseif (is_object($value) && ($value instanceof Stringable || method_exists($value, '__toString'))) {
+            return (string) $value;
+        } elseif (is_object($value) || is_array($value)) {
+            return rescue(function () use ($value) {
+                return json_encode($value);
+            }, $value);
+        }
+
+        return $value;
+    }
+
+    /**
+     * Resolve given value.
+     *
+     * @param  mixed  $value
+     * @return mixed
+     */
+    public static function value($value)
+    {
+        if ($value instanceof BackedEnum) {
+            return $value->value;
+        }
+
+        return value($value);
     }
 
     /**
@@ -90,5 +132,50 @@ class Util
         return collect(config('auth.guards'))->reject(function ($guard) use ($provider) {
             return ! ($guard['driver'] === 'session' && $guard['provider'] === $provider);
         })->keys()->first();
+    }
+
+    /**
+     * Get the dependent validation rules.
+     *
+     * @param  string  $attribute
+     * @return array<string, string>
+     *
+     * @see \Illuminate\Validation\Validator::$dependentRules
+     */
+    public static function dependentRules($attribute)
+    {
+        return collect([
+            'After',
+            'AfterOrEqual',
+            'Before',
+            'BeforeOrEqual',
+            'Confirmed',
+            'Different',
+            'ExcludeIf',
+            'ExcludeUnless',
+            'ExcludeWith',
+            'ExcludeWithout',
+            'Gt',
+            'Gte',
+            'Lt',
+            'Lte',
+            'AcceptedIf',
+            'DeclinedIf',
+            'RequiredIf',
+            'RequiredUnless',
+            'RequiredWith',
+            'RequiredWithAll',
+            'RequiredWithout',
+            'RequiredWithoutAll',
+            'Prohibited',
+            'ProhibitedIf',
+            'ProhibitedUnless',
+            'Prohibits',
+            'Same',
+        ])->mapWithKeys(function ($rule) use ($attribute) {
+            $rule = Str::snake($rule);
+
+            return ["{$rule}:" => "{$rule}:{$attribute}."];
+        })->all();
     }
 }

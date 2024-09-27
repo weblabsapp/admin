@@ -21,8 +21,8 @@ trait PerformsQueries
      * @return \Illuminate\Database\Eloquent\Builder
      */
     public static function buildIndexQuery(NovaRequest $request, $query, $search = null,
-                                      array $filters = [], array $orderings = [],
-                                      $withTrashed = TrashedStatus::DEFAULT)
+        array $filters = [], array $orderings = [],
+        $withTrashed = TrashedStatus::DEFAULT)
     {
         return static::applyOrderings(static::applyFilters(
             $request, static::initializeQuery($request, $query, (string) $search, $withTrashed), $filters
@@ -117,7 +117,7 @@ trait PerformsQueries
      * @return \Laravel\Scout\Builder
      */
     public static function buildIndexQueryUsingScout(NovaRequest $request, $search = null,
-                                          $withTrashed = TrashedStatus::DEFAULT)
+        $withTrashed = TrashedStatus::DEFAULT)
     {
         return tap(static::applySoftDeleteConstraint(
             static::newModel()->search($search), $withTrashed
@@ -168,7 +168,7 @@ trait PerformsQueries
 
         if (empty($orderings)) {
             return empty($query->getQuery()->orders) && ! static::usesScout()
-                        ? $query->latest($query->getModel()->getQualifiedKeyName())
+                        ? static::defaultOrderings($query)
                         : $query;
         }
 
@@ -177,6 +177,17 @@ trait PerformsQueries
         }
 
         return $query;
+    }
+
+    /**
+     * Apply the default orderings for the given resource.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Eloquent\Relations\Relation  $query
+     * @return \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Eloquent\Relations\Relation
+     */
+    public static function defaultOrderings($query)
+    {
+        return $query->latest($query->getModel()->getQualifiedKeyName());
     }
 
     /**

@@ -3,7 +3,7 @@
     v-bind="{ ...$props, ...$attrs }"
     :is="component"
     ref="button"
-    class="cursor-pointer rounded text-sm font-bold focus:outline-none focus:ring"
+    class="cursor-pointer rounded text-sm font-bold focus:outline-none focus:ring ring-primary-200 dark:ring-gray-600"
     :class="{
       'inline-flex items-center justify-center': align == 'center',
       'inline-flex items-center justify-start': align == 'left',

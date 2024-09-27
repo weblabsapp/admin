@@ -2,13 +2,15 @@
 
 namespace Laravel\Nova;
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Laravel\Nova\Menu\MenuItem;
 
-abstract class Dashboard extends Element
+abstract class Dashboard extends Element implements HasMenu
 {
     use AuthorizedToSee;
-    use Metable;
     use Makeable;
+    use Metable;
     use ProxiesCanSeeToGate;
 
     /**
@@ -17,6 +19,13 @@ abstract class Dashboard extends Element
      * @var string
      */
     public $name;
+
+    /**
+     * Determines whether Nova should show a refresh button.
+     *
+     * @var bool
+     */
+    public $showRefreshButton = false;
 
     /**
      * Get the key value for the dashboard.
@@ -64,4 +73,27 @@ abstract class Dashboard extends Element
      * @return array
      */
     abstract public function cards();
+
+    /**
+     * Build the menu that renders the navigation links for the tool.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return mixed
+     */
+    public function menu(Request $request)
+    {
+        return MenuItem::dashboard(static::class);
+    }
+
+    /**
+     * Show a refresh button for the dashboard.
+     *
+     * @return $this
+     */
+    public function showRefreshButton()
+    {
+        $this->showRefreshButton = true;
+
+        return $this;
+    }
 }

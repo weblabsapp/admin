@@ -130,7 +130,7 @@ abstract class Value extends RangedMetric
         if ($request->range === 'ALL') {
             return $this->result(
                 round(
-                    with(clone $query)->{$function}($column),
+                    (clone $query)->{$function}($column) ?? 0,
                     $this->roundingPrecision,
                     $this->roundingMode
                 )
@@ -139,11 +139,14 @@ abstract class Value extends RangedMetric
 
         $dateColumn = $dateColumn ?? $query->getModel()->getQualifiedCreatedAtColumn();
         $timezone = Nova::resolveUserTimezone($request) ?? $this->getDefaultTimezone($request);
+        $range = $request->range ?? 1;
+
+        $currentRange = $this->currentRange($range, $timezone);
+        $previousRange = $this->previousRange($range, $timezone);
 
         $previousValue = round(
-            with(clone $query)->whereBetween(
-                $dateColumn,
-                $this->formatQueryDateBetween($this->previousRange($request->range, $timezone))
+            (clone $query)->whereBetween(
+                $dateColumn, $this->formatQueryDateBetween($previousRange)
             )->{$function}($column) ?? 0,
             $this->roundingPrecision,
             $this->roundingMode
@@ -151,9 +154,8 @@ abstract class Value extends RangedMetric
 
         return $this->result(
             round(
-                with(clone $query)->whereBetween(
-                    $dateColumn,
-                    $this->formatQueryDateBetween($this->currentRange($request->range, $timezone))
+                (clone $query)->whereBetween(
+                    $dateColumn, $this->formatQueryDateBetween($currentRange)
                 )->{$function}($column) ?? 0,
                 $this->roundingPrecision,
                 $this->roundingMode
@@ -166,28 +168,35 @@ abstract class Value extends RangedMetric
      *
      * @param  string|int  $range
      * @param  string  $timezone
-     * @return array<int, \Carbon\CarbonImmutable>
+     * @return array<int, \Carbon\CarbonInterface>
      */
     protected function previousRange($range, $timezone)
     {
         if ($range == 'TODAY') {
             return [
-                CarbonImmutable::now($timezone)->modify('yesterday')->setTime(0, 0),
-                CarbonImmutable::today($timezone)->subSecond(),
+                CarbonImmutable::now($timezone)->subDay()->startOfDay(),
+                CarbonImmutable::now($timezone)->subDay()->endOfDay(),
             ];
         }
 
         if ($range == 'YESTERDAY') {
             return [
-                CarbonImmutable::yesterday($timezone)->modify('yesterday')->setTime(0, 0),
-                CarbonImmutable::yesterday($timezone)->subSecond(),
+                CarbonImmutable::now($timezone)->subDays(2)->startOfDay(),
+                CarbonImmutable::now($timezone)->subDays(2)->endOfDay(),
+            ];
+        }
+
+        if ($range == 'THIS_WEEK') {
+            return [
+                CarbonImmutable::now($timezone)->subWeek()->startOfWeek(),
+                CarbonImmutable::now($timezone)->subWeek()->endOfWeek(),
             ];
         }
 
         if ($range == 'MTD') {
             return [
-                CarbonImmutable::now($timezone)->modify('first day of previous month')->setTime(0, 0),
-                CarbonImmutable::now($timezone)->firstOfMonth()->subSecond(),
+                CarbonImmutable::now($timezone)->subMonthWithoutOverflow()->startOfMonth(),
+                CarbonImmutable::now($timezone)->subMonthWithoutOverflow(),
             ];
         }
 
@@ -197,8 +206,8 @@ abstract class Value extends RangedMetric
 
         if ($range == 'YTD') {
             return [
-                CarbonImmutable::now($timezone)->subYears(1)->firstOfYear()->setTime(0, 0),
-                CarbonImmutable::now($timezone)->firstOfYear()->subSecond(),
+                CarbonImmutable::now($timezone)->subYear()->startOfYear(),
+                CarbonImmutable::now($timezone)->subYear(),
             ];
         }
 
@@ -217,8 +226,8 @@ abstract class Value extends RangedMetric
     protected function previousQuarterRange($timezone)
     {
         return [
-            CarbonImmutable::firstDayOfPreviousQuarter($timezone),
-            CarbonImmutable::firstDayOfQuarter($timezone)->subSecond(),
+            CarbonImmutable::now($timezone)->subQuarterWithOverflow()->startOfQuarter(),
+            CarbonImmutable::now($timezone)->subQuarterWithOverflow()->subSecond(),
         ];
     }
 
@@ -227,27 +236,34 @@ abstract class Value extends RangedMetric
      *
      * @param  string|int  $range
      * @param  string  $timezone
-     * @return array<int, \Carbon\CarbonImmutable>
+     * @return array<int, \Carbon\CarbonInterface>
      */
     protected function currentRange($range, $timezone)
     {
         if ($range == 'TODAY') {
             return [
-                CarbonImmutable::today($timezone),
-                CarbonImmutable::now($timezone),
+                CarbonImmutable::now($timezone)->startOfDay(),
+                CarbonImmutable::now($timezone)->endOfDay(),
             ];
         }
 
         if ($range == 'YESTERDAY') {
             return [
-                CarbonImmutable::yesterday($timezone),
-                CarbonImmutable::yesterday($timezone)->endOfDay(),
+                CarbonImmutable::now($timezone)->subDay()->startOfDay(),
+                CarbonImmutable::now($timezone)->subDay()->endOfDay(),
+            ];
+        }
+
+        if ($range == 'THIS_WEEK') {
+            return [
+                CarbonImmutable::now($timezone)->startOfWeek(),
+                CarbonImmutable::now($timezone)->endOfWeek(),
             ];
         }
 
         if ($range == 'MTD') {
             return [
-                CarbonImmutable::now($timezone)->firstOfMonth(),
+                CarbonImmutable::now($timezone)->startOfMonth(),
                 CarbonImmutable::now($timezone),
             ];
         }
@@ -258,7 +274,7 @@ abstract class Value extends RangedMetric
 
         if ($range == 'YTD') {
             return [
-                CarbonImmutable::now($timezone)->firstOfYear(),
+                CarbonImmutable::now($timezone)->startOfYear(),
                 CarbonImmutable::now($timezone),
             ];
         }
@@ -278,7 +294,7 @@ abstract class Value extends RangedMetric
     protected function currentQuarterRange($timezone)
     {
         return [
-            CarbonImmutable::firstDayOfQuarter($timezone),
+            CarbonImmutable::now($timezone)->startOfQuarter(),
             CarbonImmutable::now($timezone),
         ];
     }

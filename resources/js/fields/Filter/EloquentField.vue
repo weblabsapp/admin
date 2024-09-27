@@ -6,9 +6,10 @@
       <SearchInput
         v-if="isSearchable"
         ref="searchable"
-        :data-testid="`${field.uniqueKey}-search-filter`"
+        :dusk="`${field.uniqueKey}-search-filter`"
         @input="performSearch"
         @clear="handleClearSelection"
+        @shown="handleShowingActiveSearchInput"
         @selected="selectResource"
         :debounce="field.debounce"
         :value="selectedResource"
@@ -16,6 +17,7 @@
         :clearable="true"
         trackBy="value"
         class="w-full"
+        mode="modal"
       >
         <div v-if="selectedResource" class="flex items-center">
           <div v-if="selectedResource.avatar" class="mr-3">
@@ -30,11 +32,11 @@
 
         <template #option="{ selected, option }">
           <div class="flex items-center">
-            <div v-if="option.avatar" class="mr-3">
+            <div v-if="option.avatar" class="flex-none mr-3">
               <img :src="option.avatar" class="w-8 h-8 rounded-full block" />
             </div>
 
-            <div>
+            <div class="flex-auto">
               <div
                 class="text-sm font-semibold leading-normal"
                 :class="{ 'text-white dark:text-gray-900': selected }"
@@ -74,6 +76,8 @@ import debounce from 'lodash/debounce'
 import find from 'lodash/find'
 import isNil from 'lodash/isNil'
 import { PerformsSearches } from '@/mixins'
+import storage from '@/storage/ResourceSearchStorage'
+import filled from '@/util/filled'
 
 export default {
   emits: ['change'],
@@ -111,20 +115,18 @@ export default {
 
   created() {
     this.debouncedHandleChange = debounce(() => this.handleChange(), 500)
+
+    Nova.$on('filter-active', this.handleClosingInactiveSearchInputs)
   },
 
   beforeUnmount() {
+    Nova.$off('filter-active', this.handleClosingInactiveSearchInputs)
     Nova.$off('filter-reset', this.handleFilterReset)
   },
 
   watch: {
     selectedResource(resource) {
-      if (!isNil(resource) && resource !== '') {
-        this.selectedResourceId = resource.value
-      } else {
-        this.selectedResourceId = ''
-        this.getAvailableResources()
-      }
+      this.selectedResourceId = filled(resource) ? resource.value : ''
     },
 
     selectedResourceId() {
@@ -148,11 +150,13 @@ export default {
         }
       }
 
-      this.getAvailableResources().then(() => {
-        if (shouldSelectInitialResource === true) {
-          this.selectInitialResource()
-        }
-      })
+      if (!this.isSearchable || shouldSelectInitialResource) {
+        this.getAvailableResources().then(() => {
+          if (shouldSelectInitialResource === true) {
+            this.selectInitialResource()
+          }
+        })
+      }
     },
 
     /**
@@ -162,13 +166,15 @@ export default {
       let queryParams = this.queryParams
 
       if (!isNil(search)) {
-        queryParams.params.first = false
-        queryParams.params.current = null
-        queryParams.params.search = search
+        queryParams.first = false
+        queryParams.current = null
+        queryParams.search = search
       }
 
-      return Nova.request()
-        .get(`/nova-api/${this.filter.field.resourceName}/search`, queryParams)
+      return storage
+        .fetchAvailableResources(this.filter.field.resourceName, {
+          params: queryParams,
+        })
         .then(({ data: { resources, softDeletes, withTrashed } }) => {
           if (!this.isSearchable) {
             this.withTrashed = withTrashed
@@ -185,28 +191,38 @@ export default {
     selectInitialResource() {
       this.selectedResource = find(
         this.availableResources,
-        r => r.value == this.selectedResourceId
+        r => r.value === this.selectedResourceId
       )
+    },
+
+    handleShowingActiveSearchInput() {
+      Nova.$emit('filter-active', this.filterKey)
+    },
+
+    closeSearchableRef() {
+      if (this.$refs.searchable) {
+        this.$refs.searchable.close()
+      }
+    },
+
+    handleClosingInactiveSearchInputs(key) {
+      if (key !== this.filterKey) {
+        this.closeSearchableRef()
+      }
     },
 
     /**
      * Handle clear search selection
      */
     handleClearSelection() {
-      if (this.$refs.searchable) {
-        this.$refs.searchable.close()
-      }
-
       this.clearSelection()
     },
 
     handleChange() {
-      this.$store.commit(`${this.resourceName}/updateFilterState`, {
+      this.$emit('change', {
         filterClass: this.filterKey,
         value: this.selectedResourceId,
       })
-
-      this.$emit('change')
     },
 
     handleFilterReset() {
@@ -218,9 +234,7 @@ export default {
       this.selectedResource = null
       this.availableResources = []
 
-      if (this.$refs.searchable) {
-        this.$refs.searchable.close()
-      }
+      this.closeSearchableRef()
 
       this.initializeComponent()
     },
@@ -256,12 +270,10 @@ export default {
      */
     queryParams() {
       return {
-        params: {
-          current: this.selectedResourceId,
-          first: this.selectedResourceId && this.isSearchable,
-          search: this.search,
-          withTrashed: this.withTrashed,
-        },
+        current: this.selectedResourceId,
+        first: this.selectedResourceId && this.isSearchable,
+        search: this.search,
+        withTrashed: this.withTrashed,
       }
     },
   },

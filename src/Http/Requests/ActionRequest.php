@@ -4,9 +4,10 @@ namespace Laravel\Nova\Http\Requests;
 
 use Closure;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Fluent;
 use Laravel\Nova\Actions\ActionModelCollection;
 use Laravel\Nova\Fields\ActionFields;
+use Laravel\Nova\Fields\FieldCollection;
+use Laravel\Nova\Support\Fluent;
 
 /**
  * @property-read string|null $resources
@@ -113,17 +114,29 @@ class ActionRequest extends NovaRequest
 
         $query = $this->viaRelationship()
                     ? $this->modelsViaRelationship()
-                    : tap($this->newQueryWithoutScopes(), function ($query) {
-                        $resource = $this->resource();
-
-                        $resource::indexQuery(
-                            $this, $query->with($resource::$with)
-                        );
-                    });
+                    : $this->toQueryWithoutScopes()->whereKey(explode(',', $this->resources));
 
         return $query->tap(function ($query) {
-            $query->whereKey(explode(',', $this->resources))
-                ->latest($this->model()->getQualifiedKeyName());
+            $query->latest($this->model()->getQualifiedKeyName());
+        });
+    }
+
+    /**
+     * Transform the request into a query without scope.
+     *
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function toQueryWithoutScopes()
+    {
+        return tap($this->newQueryWithoutScopes(), function ($query) {
+            $resource = $this->resource();
+            $query->with($resource::$with);
+
+            if (! $this->allResourcesSelected() && $this->selectedResourceIds()->count() === 1) {
+                $resource::detailQuery($this, $query);
+            } else {
+                $resource::indexQuery($this, $query);
+            }
         });
     }
 
@@ -134,11 +147,18 @@ class ActionRequest extends NovaRequest
      */
     protected function modelsViaRelationship()
     {
-        return tap($this->findParentResource(), function ($resource) {
+        $relation = tap($this->findParentResource(), function ($resource) {
             abort_unless($resource->hasRelatableField($this, $this->viaRelationship), 404);
-        })->model()->{$this->viaRelationship}()
-                        ->withoutGlobalScopes()
-                        ->whereIn($this->model()->getQualifiedKeyName(), explode(',', $this->resources));
+        })->model()->{$this->viaRelationship}()->withoutGlobalScopes();
+
+        if (isset($this->pivots) && ! empty($this->pivots)) {
+            /** @var class-string<\Illuminate\Database\Eloquent\Relations\Pivot> $pivotClass */
+            $pivotClass = $relation->getPivotClass();
+
+            $relation->wherePivotIn((new $pivotClass())->getKeyName(), explode(',', $this->pivots));
+        }
+
+        return $relation->whereIn($this->model()->getQualifiedKeyName(), explode(',', $this->resources));
     }
 
     /**
@@ -149,9 +169,11 @@ class ActionRequest extends NovaRequest
      */
     protected function mapChunk($chunk)
     {
-        return ActionModelCollection::make($this->isPivotAction()
-                    ? $chunk->map->pivot
-                    : $chunk);
+        return ActionModelCollection::make(
+            $this->isPivotAction()
+                ? $chunk->map->{$this->pivotRelation()->getPivotAccessor()}
+                : $chunk
+        );
     }
 
     /**
@@ -188,8 +210,11 @@ class ActionRequest extends NovaRequest
         return once(function () {
             $fields = new Fluent;
 
-            $results = collect($this->action()->fields($this))
-                            ->filter->authorizedToSee($this)
+            $results = FieldCollection::make($this->action()->fields($this))
+                            ->authorized($this)
+                            ->applyDependsOn($this)
+                            ->withoutReadonly($this)
+                            ->withoutUnfillable()
                             ->mapWithKeys(function ($field) use ($fields) {
                                 return [$field->attribute => $field->fillForAction($this, $fields)];
                             });

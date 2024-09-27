@@ -2,6 +2,7 @@ let mix = require('laravel-mix')
 let tailwindcss = require('tailwindcss')
 let path = require('path')
 let postcssImport = require('postcss-import')
+let postcssRtlcss = require('postcss-rtlcss')
 
 /*
  |--------------------------------------------------------------------------
@@ -16,20 +17,25 @@ let postcssImport = require('postcss-import')
 
 mix
   .js('resources/js/app.js', 'public')
-  .vue({version: 3})
+  .vue({ version: 3 })
   .sourceMaps()
   .extract()
   .setPublicPath('public')
-  .postCss('resources/css/app.css', 'public', [postcssImport(), tailwindcss('tailwind.config.js'),])
+  .postCss('resources/css/app.css', 'public', [
+    postcssImport(),
+    tailwindcss('tailwind.config.js'),
+    postcssRtlcss(),
+  ])
   .copy('resources/fonts/', 'public/fonts')
-  .alias({'@': path.join(__dirname, 'resources/js/')})
-  .webpackConfig({output: {uniqueName: 'laravel/nova'},})
+  .alias({ '@': path.join(__dirname, 'resources/js/') })
+  .webpackConfig({ output: { uniqueName: 'laravel/nova' } })
   .options({
     vue: {
+      exposeFilename: true,
       compilerOptions: {
-        isCustomElement: tag => tag.startsWith('trix-')
-      }
+        isCustomElement: tag => tag.startsWith('trix-'),
+      },
     },
-    processCssUrls: false
+    processCssUrls: false,
   })
   .version()

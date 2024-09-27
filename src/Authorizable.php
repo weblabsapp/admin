@@ -60,7 +60,7 @@ trait Authorizable
         $gate = Gate::getPolicyFor(static::newModel());
 
         return ! is_null($gate) && method_exists($gate, 'viewAny')
-                        ? Gate::check('viewAny', get_class(static::newModel()))
+                        ? Gate::forUser(Nova::user($request))->check('viewAny', get_class(static::newModel()))
                         : true;
     }
 
@@ -110,7 +110,7 @@ trait Authorizable
     public static function authorizedToCreate(Request $request)
     {
         if (static::authorizable()) {
-            return Gate::check('create', get_class(static::newModel()));
+            return Gate::forUser(Nova::user($request))->check('create', get_class(static::newModel()));
         }
 
         return true;
@@ -181,7 +181,7 @@ trait Authorizable
         $gate = Gate::getPolicyFor(static::newModel());
 
         return ! is_null($gate) && method_exists($gate, 'replicate')
-                        ? Gate::check('replicate', $this->model())
+                        ? Gate::forUser(Nova::user($request))->check('replicate', $this->model())
                         : $this->authorizedToCreate($request) && $this->authorizedToUpdate($request);
     }
 
@@ -248,7 +248,7 @@ trait Authorizable
         $method = 'add'.class_basename($model);
 
         return ! is_null($gate) && method_exists($gate, $method)
-                        ? Gate::check($method, $this->model())
+                        ? Gate::forUser(Nova::user($request))->check($method, $this->model())
                         : true;
     }
 
@@ -269,7 +269,7 @@ trait Authorizable
         $method = 'attachAny'.Str::singular(class_basename($model));
 
         return ! is_null($gate) && method_exists($gate, $method)
-                    ? Gate::check($method, [$this->model()])
+                    ? Gate::forUser(Nova::user($request))->check($method, [$this->model()])
                     : true;
     }
 
@@ -290,7 +290,7 @@ trait Authorizable
         $method = 'attach'.Str::singular(class_basename($model));
 
         return ! is_null($gate) && method_exists($gate, $method)
-                    ? Gate::check($method, [$this->model(), $model])
+                    ? Gate::forUser(Nova::user($request))->check($method, [$this->model(), $model])
                     : true;
     }
 
@@ -312,7 +312,7 @@ trait Authorizable
         $method = 'detach'.Str::singular(class_basename($model));
 
         return ! is_null($gate) && method_exists($gate, $method)
-                    ? Gate::check($method, [$this->model(), $model])
+                    ? Gate::forUser(Nova::user($request))->check($method, [$this->model(), $model])
                     : true;
     }
 
@@ -338,7 +338,7 @@ trait Authorizable
         $method = 'runAction';
 
         return ! is_null($gate) && method_exists($gate, $method)
-                        ? Gate::check($method, [$this->model(), $action])
+                        ? Gate::forUser(Nova::user($request))->check($method, [$this->model(), $action])
                         : $this->authorizedToUpdate($request);
     }
 
@@ -360,7 +360,7 @@ trait Authorizable
         $method = 'runDestructiveAction';
 
         return ! is_null($gate) && method_exists($gate, $method)
-                        ? Gate::check($method, [$this->model(), $action])
+                        ? Gate::forUser(Nova::user($request))->check($method, [$this->model(), $action])
                         : $this->authorizedToDelete($request);
     }
 
@@ -372,7 +372,7 @@ trait Authorizable
      */
     public function authorizedToImpersonate(NovaRequest $request)
     {
-        $user = $request->user();
+        $user = Nova::user($request);
 
         return app(ImpersonatesUsers::class)->impersonating($request) === false
                     && ! $this->resource->is($user)
@@ -392,7 +392,9 @@ trait Authorizable
      */
     public function authorizeTo(Request $request, $ability)
     {
-        throw_unless($this->authorizedTo($request, $ability), AuthorizationException::class);
+        if (static::authorizable()) {
+            Gate::forUser(Nova::user($request))->authorize($ability, $this->resource);
+        }
     }
 
     /**
@@ -404,6 +406,6 @@ trait Authorizable
      */
     public function authorizedTo(Request $request, $ability)
     {
-        return static::authorizable() ? Gate::check($ability, $this->resource) : true;
+        return static::authorizable() ? Gate::forUser(Nova::user($request))->check($ability, $this->resource) : true;
     }
 }

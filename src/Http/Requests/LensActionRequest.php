@@ -16,11 +16,21 @@ class LensActionRequest extends ActionRequest
      */
     public function toQuery()
     {
-        return tap($this->lens()->query(LensRequest::createFrom($this), $this->newQuery()), function ($query) {
+        return tap($this->lens()->query(LensRequest::createFrom($this), $this->newSearchQuery()), function ($query) {
             if (! $query instanceof Builder) {
                 throw new LogicException('Lens must return an Eloquent query instance in order to apply actions.');
             }
         });
+    }
+
+    /**
+     * Transform the request into a query without scope.
+     *
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function toQueryWithoutScopes()
+    {
+        return $this->toQuery();
     }
 
     /**

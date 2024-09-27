@@ -24,6 +24,21 @@ class DetailComponent extends Component
     }
 
     /**
+     * Open the delete selector.
+     *
+     * @param  \Laravel\Dusk\Browser  $browser
+     * @return void
+     *
+     * @throws \Facebook\WebDriver\Exception\TimeOutException
+     */
+    public function openControlSelector(Browser $browser)
+    {
+        $browser->whenAvailable("@{$this->resourceId}-control-selector", function ($browser) {
+            $browser->click('');
+        })->pause(100);
+    }
+
+    /**
      * Get the root selector for the component.
      *
      * @return string
@@ -41,9 +56,11 @@ class DetailComponent extends Component
      */
     public function assert(Browser $browser)
     {
-        $browser->pause(500);
-
-        $browser->assertVisible($this->selector());
+        tap($this->selector(), function ($selector) use ($browser) {
+            $browser->pause(100)
+                ->waitFor($selector)
+                ->assertVisible($selector);
+        });
     }
 
     /**

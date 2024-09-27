@@ -3,12 +3,13 @@
     :field="currentField"
     :errors="errors"
     :show-help-text="showHelpText"
+    :full-width-content="fullWidthContent"
   >
     <template #field>
       <div class="flex items-center">
         <input
           type="date"
-          class="form-control form-input form-input-bordered"
+          class="form-control form-input form-control-bordered"
           ref="dateTimePicker"
           :id="currentField.uniqueKey"
           :dusk="field.attribute"
@@ -17,11 +18,10 @@
           :class="errorClasses"
           :disabled="currentlyIsReadonly"
           @change="handleChange"
+          :min="currentField.min"
+          :max="currentField.max"
+          :step="currentField.step"
         />
-
-        <span class="ml-3">
-          {{ timezone }}
-        </span>
       </div>
     </template>
   </DefaultField>
@@ -31,6 +31,7 @@
 import isNil from 'lodash/isNil'
 import { DateTime } from 'luxon'
 import { DependentFormField, HandlesValidationErrors } from '@/mixins'
+import filled from '@/util/filled'
 
 export default {
   mixins: [HandlesValidationErrors, DependentFormField],
@@ -51,26 +52,20 @@ export default {
      * On save, populate our form data
      */
     fill(formData) {
-      formData.append(this.field.attribute, this.value || '')
+      if (this.currentlyIsVisible) {
+        this.fillIfVisible(formData, this.fieldAttribute, this.value)
+      }
     },
 
     /**
      * Update the field's internal value
      */
     handleChange(event) {
-      let value = event?.target?.value ?? event
-
-      this.value = DateTime.fromISO(value).toISODate()
+      this.value = event?.target?.value ?? event
 
       if (this.field) {
-        this.emitFieldValueChange(this.field.attribute, this.value)
+        this.emitFieldValueChange(this.fieldAttribute, this.value)
       }
-    },
-  },
-
-  computed: {
-    timezone() {
-      return Nova.config('userTimezone') || Nova.config('timezone')
     },
   },
 }

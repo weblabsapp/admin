@@ -4,18 +4,24 @@ namespace Laravel\Nova\Fields;
 
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\MissingValue;
 use Illuminate\Support\Collection;
+use Illuminate\Support\LazyCollection;
 use Laravel\Nova\Contracts\FilterableField;
 use Laravel\Nova\Contracts\ListableField;
 use Laravel\Nova\Contracts\RelatableField;
 use Laravel\Nova\Contracts\Resolvable;
 use Laravel\Nova\Http\Requests\NovaRequest;
 use Laravel\Nova\Panel;
+use Laravel\Nova\ResourceTool;
 use Laravel\Nova\ResourceToolElement;
+use Laravel\Nova\Util;
 
 /**
  * @template TKey of int
- * @template TValue of \Laravel\Nova\Fields\FieldElement|\Laravel\Nova\Fields\Field
+ * @template TValue of \Laravel\Nova\Panel|\Laravel\Nova\ResourceToolElement|\Laravel\Nova\Fields\Field|\Illuminate\Http\Resources\MissingValue
+ *
+ * @extends \Illuminate\Support\Collection<TKey, TValue>
  */
 class FieldCollection extends Collection
 {
@@ -23,7 +29,7 @@ class FieldCollection extends Collection
      * Assign the fields with the given panels to their parent panel.
      *
      * @param  string  $label
-     * @return static<TKey, \Laravel\Nova\Fields\Field>
+     * @return static<TKey, TValue>
      */
     public function assignDefaultPanel($label)
     {
@@ -35,13 +41,29 @@ class FieldCollection extends Collection
     }
 
     /**
+     * Flatten stacked fields.
+     *
+     * @return static<int, TValue>
+     */
+    public function flattenStackedFields()
+    {
+        return $this->map(function ($field) {
+            if ($field instanceof Stack) {
+                return $field->fields()->all();
+            }
+
+            return $field;
+        })->flatten();
+    }
+
+    /**
      * Find a given field by its attribute.
      *
      * @template TGetDefault
      *
      * @param  string  $attribute
      * @param  TGetDefault|\Closure():TGetDefault  $default
-     * @return \Laravel\Nova\Fields\Field|TGetDefault
+     * @return TValue|TGetDefault
      */
     public function findFieldByAttribute($attribute, $default = null)
     {
@@ -55,7 +77,7 @@ class FieldCollection extends Collection
      * Filter elements should be displayed for the given request.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @return static<int, \Laravel\Nova\Fields\Field>
+     * @return static<int, TValue>
      */
     public function authorized(Request $request)
     {
@@ -68,7 +90,7 @@ class FieldCollection extends Collection
      * Filter elements should be displayed for the given request.
      *
      * @param  mixed  $resource
-     * @return static<int, \Laravel\Nova\Fields\Field>
+     * @return static<int, TValue>
      */
     public function resolve($resource)
     {
@@ -83,7 +105,7 @@ class FieldCollection extends Collection
      * Resolve value of fields for display.
      *
      * @param  mixed  $resource
-     * @return static<int, \Laravel\Nova\Fields\Field>
+     * @return static<int, TValue>
      */
     public function resolveForDisplay($resource)
     {
@@ -97,6 +119,42 @@ class FieldCollection extends Collection
             } else {
                 $field->resolveForDisplay($resource);
             }
+        });
+    }
+
+    /**
+     * Remove non-creation fields from the collection.
+     *
+     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
+     * @param  mixed  $resource
+     * @return static<int, \Laravel\Nova\Fields\Field>
+     */
+    public function onlyCreateFields(NovaRequest $request, $resource)
+    {
+        return $this->reject(function ($field) use ($resource, $request) {
+            return $field instanceof ListableField ||
+                ($field instanceof ResourceTool || $field instanceof ResourceToolElement) ||
+                $field->attribute === 'ComputedField' ||
+                ($field instanceof ID && $field->attribute === $resource->getKeyName()) ||
+                ! $field->isShownOnCreation($request);
+        });
+    }
+
+    /**
+     * Remove non-update fields from the collection.
+     *
+     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
+     * @param  mixed  $resource
+     * @return static<int, \Laravel\Nova\Fields\Field>
+     */
+    public function onlyUpdateFields(NovaRequest $request, $resource)
+    {
+        return $this->reject(function ($field) use ($resource, $request) {
+            return $field instanceof ListableField ||
+                ($field instanceof ResourceTool || $field instanceof ResourceToolElement) ||
+                $field->attribute === 'ComputedField' ||
+                ($field instanceof ID && $field->attribute === $resource->getKeyName()) ||
+                ! $field->isShownOnUpdate($request, $resource);
         });
     }
 
@@ -123,9 +181,23 @@ class FieldCollection extends Collection
      */
     public function filterForPreview(NovaRequest $request, $resource)
     {
-        return $this->filter(function ($field) use ($resource, $request) {
+        return $this->filter(function (Field $field) use ($resource, $request) {
             return $field->isShownOnPreview($request, $resource);
         })->values();
+    }
+
+    /**
+     * Filter fields for showing when peeking.
+     *
+     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
+     * @return static<int, \Laravel\Nova\Fields\Field>
+     */
+    public function filterForPeeking(NovaRequest $request)
+    {
+        return $this
+            ->filter(function (Field $field) use ($request) {
+                return $field->isShownWhenPeeking($request);
+            })->values();
     }
 
     /**
@@ -146,7 +218,7 @@ class FieldCollection extends Collection
      * Reject if the field is readonly.
      *
      * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
-     * @return static<int, \Laravel\Nova\Fields\Field>
+     * @return static<int, TValue>
      */
     public function withoutReadonly(NovaRequest $request)
     {
@@ -156,9 +228,21 @@ class FieldCollection extends Collection
     }
 
     /**
+     * Reject if the field is a missing value.
+     *
+     * @return static<int, \Laravel\Nova\Panel|\Laravel\Nova\ResourceToolElement|\Laravel\Nova\Fields\Field>
+     */
+    public function withoutMissingValues()
+    {
+        return $this->reject(function ($field) {
+            return $field instanceof MissingValue;
+        });
+    }
+
+    /**
      * Reject fields which use their own index listings.
      *
-     * @return static<int, \Laravel\Nova\Fields\Field>
+     * @return static<int, TValue>
      */
     public function withoutListableFields()
     {
@@ -168,9 +252,21 @@ class FieldCollection extends Collection
     }
 
     /**
+     * Reject if the field is unfillable.
+     *
+     * @return static<int, TValue>
+     */
+    public function withoutUnfillable()
+    {
+        return $this->reject(function ($field) {
+            return $field instanceof Unfillable;
+        });
+    }
+
+    /**
      * Reject fields which are actually ResourceTools.
      *
-     * @return static<int, \Laravel\Nova\Fields\Field>
+     * @return static<int, TValue>
      */
     public function withoutResourceTools()
     {
@@ -182,7 +278,7 @@ class FieldCollection extends Collection
     /**
      * Filter the fields to only many-to-many relationships.
      *
-     * @return static<int, \Laravel\Nova\Fields\MorphToMany|\Laravel\Nova\Fields\BelongsToMany>
+     * @return static<TKey, \Laravel\Nova\Fields\MorphToMany|\Laravel\Nova\Fields\BelongsToMany>
      */
     public function filterForManyToManyRelations()
     {
@@ -194,7 +290,7 @@ class FieldCollection extends Collection
     /**
      * Reject if the field supports Filterable Field.
      *
-     * @return static<int, \Laravel\Nova\Fields\MorphToMany|\Laravel\Nova\Fields\BelongsToMany>
+     * @return static<TKey, \Laravel\Nova\Fields\Field&\Laravel\Nova\Contracts\FilterableField>
      */
     public function withOnlyFilterableFields()
     {
@@ -224,14 +320,20 @@ class FieldCollection extends Collection
      */
     public function applyDependsOnWithDefaultValues(NovaRequest $request)
     {
-        $payloads = $this->mapWithKeys(function ($field) use ($request) {
-            $key = $field instanceof RelatableField ? $field->relationshipName() : $field->attribute;
+        $payloads = new LazyCollection(function () use ($request) {
+            foreach ($this->items as $field) {
+                $key = $field instanceof RelatableField ? $field->relationshipName() : $field->attribute;
 
-            return [$key => $field->resolveDependentValue($request)];
-        })->all();
+                if ($field instanceof MorphTo) {
+                    yield "{$key}_type" => $field->morphToType;
+                }
+
+                yield $key => Util::hydrate($field->resolveDependentValue($request));
+            }
+        });
 
         $this->each->applyDependsOn(
-            NovaRequest::createFrom($request)->mergeIfMissing($payloads)
+            NovaRequest::createFrom($request)->mergeIfMissing($payloads->all())
         );
 
         return $this;

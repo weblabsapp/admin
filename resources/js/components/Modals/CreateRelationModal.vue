@@ -3,20 +3,22 @@
     dusk="new-relation-modal"
     :show="show"
     @close-via-escape="handlePreventModalAbandonmentOnClose"
-    maxWidth="screen-md"
+    :size="size"
+    :use-focus-trap="!loading"
   >
     <div
       class="bg-gray-100 dark:bg-gray-700 rounded-lg shadow-lg overflow-hidden p-8"
     >
       <CreateResource
-        mode="modal"
-        @refresh="handleRefresh"
-        @create-cancelled="handleCreateCancelled"
         :resource-name="resourceName"
+        @create-cancelled="handleCreateCancelled"
+        @finished-loading="() => (loading = false)"
+        @refresh="handleRefresh"
+        mode="modal"
         resource-id=""
-        via-resource=""
-        via-resource-id=""
         via-relationship=""
+        via-resource-id=""
+        via-resource=""
       />
     </div>
   </Modal>
@@ -37,12 +39,17 @@ export default {
 
   props: {
     show: { type: Boolean, default: false },
+    size: { type: String, default: '2xl' },
     resourceName: {},
     resourceId: {},
     viaResource: {},
     viaResourceId: {},
     viaRelationship: {},
   },
+
+  data: () => ({
+    loading: true,
+  }),
 
   methods: {
     handleRefresh(data) {
@@ -53,13 +60,13 @@ export default {
       return this.$emit('create-cancelled')
     },
 
-    handlePreventModalAbandonmentOnClose() {
+    handlePreventModalAbandonmentOnClose(event) {
       this.handlePreventModalAbandonment(
         () => {
-          this.$emit('create-cancelled')
+          this.handleCreateCancelled()
         },
         () => {
-          e.stopPropagation()
+          event.stopPropagation()
         }
       )
     },

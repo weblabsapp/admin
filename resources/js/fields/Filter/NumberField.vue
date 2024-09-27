@@ -7,7 +7,7 @@
         }}</span>
 
         <input
-          class="block w-full form-control form-input form-input-bordered"
+          class="block w-full form-control form-input form-control-bordered"
           v-model="startValue"
           :dusk="`${field.uniqueKey}-range-start`"
           v-bind="startExtraAttributes"
@@ -19,7 +19,7 @@
           `${filter.name} - ${__('To')}`
         }}</span>
         <input
-          class="block w-full form-control form-input form-input-bordered"
+          class="block w-full form-control form-input form-control-bordered"
           v-model="endValue"
           :dusk="`${field.uniqueKey}-range-end`"
           v-bind="endExtraAttributes"
@@ -31,9 +31,9 @@
 
 <script>
 import debounce from 'lodash/debounce'
-import isNil from 'lodash/isNil'
 import omit from 'lodash/omit'
 import toNumber from 'lodash/toNumber'
+import filled from '@/util/filled'
 
 export default {
   emits: ['change'],
@@ -107,12 +107,10 @@ export default {
     },
 
     handleChange() {
-      this.$store.commit(`${this.resourceName}/updateFilterState`, {
+      this.$emit('change', {
         filterClass: this.filterKey,
         value: this.validateFilter(this.startValue, this.endValue),
       })
-
-      this.$emit('change')
     },
   },
 
@@ -161,9 +159,5 @@ export default {
       }
     },
   },
-}
-
-function filled(value) {
-  return !isNil(value) && value !== ''
 }
 </script>

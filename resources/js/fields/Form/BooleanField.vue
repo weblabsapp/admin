@@ -3,36 +3,46 @@
     :field="currentField"
     :errors="errors"
     :show-help-text="showHelpText"
+    :full-width-content="fullWidthContent"
   >
     <template #field>
       <Checkbox
-        class="mt-2"
-        @input="toggle"
-        :id="currentField.uniqueKey"
-        :name="field.name"
-        :checked="checked"
         :disabled="currentlyIsReadonly"
+        :dusk="currentField.uniqueKey"
+        :id="currentField.uniqueKey"
+        :model-value="checked"
+        :name="field.name"
+        @change="toggle"
+        class="mt-2"
       />
     </template>
   </DefaultField>
 </template>
 
 <script>
+import { Checkbox } from 'laravel-nova-ui'
 import { DependentFormField, HandlesValidationErrors } from '@/mixins'
 
 export default {
-  mixins: [HandlesValidationErrors, DependentFormField],
+  components: {
+    Checkbox,
+  },
 
-  data: () => ({
-    value: false,
-  }),
+  mixins: [HandlesValidationErrors, DependentFormField],
 
   methods: {
     /*
      * Set the initial value for the field
      */
     setInitialValue() {
-      this.value = this.currentField.value || this.value
+      this.value = this.currentField.value ?? this.value
+    },
+
+    /**
+     * Return the field default value.
+     */
+    fieldDefaultValue() {
+      return false
     },
 
     /**
@@ -40,14 +50,14 @@ export default {
      * field's internal value attribute
      */
     fill(formData) {
-      formData.append(this.field.attribute, this.trueValue)
+      this.fillIfVisible(formData, this.fieldAttribute, this.trueValue)
     },
 
     toggle() {
       this.value = !this.value
 
       if (this.field) {
-        this.emitFieldValueChange(this.field.attribute, this.value)
+        this.emitFieldValueChange(this.fieldAttribute, this.value)
       }
     },
   },

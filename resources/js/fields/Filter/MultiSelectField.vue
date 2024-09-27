@@ -3,14 +3,14 @@
     <span>{{ filter.name }}</span>
 
     <template #filter>
-      <MutilSelectControl
+      <MultiSelectControl
         :dusk="`${field.uniqueKey}-filter`"
         v-model:selected="value"
         @change="value = $event"
         :options="field.options"
       >
         <option value="" :selected="value === ''">&mdash;</option>
-      </MutilSelectControl>
+      </MultiSelectControl>
     </template>
   </FilterContainer>
 </template>
@@ -63,12 +63,10 @@ export default {
     },
 
     handleChange() {
-      this.$store.commit(`${this.resourceName}/updateFilterState`, {
+      this.$emit('change', {
         filterClass: this.filterKey,
         value: this.value,
       })
-
-      this.$emit('change')
     },
   },
 

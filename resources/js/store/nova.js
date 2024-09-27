@@ -1,4 +1,7 @@
 import { usePage } from '@inertiajs/inertia-vue3'
+import { Inertia } from '@inertiajs/inertia'
+import forEach from 'lodash/forEach'
+import filled from '@/util/filled'
 
 export default {
   state: () => ({
@@ -6,15 +9,16 @@ export default {
     currentUser: null,
     mainMenu: [],
     userMenu: [],
+    breadcrumbs: [],
     resources: [],
     version: '4.x',
     mainMenuShown: false,
-    notificationsShown: false,
-    notifications: [],
-    unreadNotifications: false,
     canLeaveForm: true,
     canLeaveModal: true,
+    pushStateWasTriggered: false,
     validLicense: true,
+    queryStringParams: {},
+    compiledQueryStringParams: '',
   }),
 
   getters: {
@@ -22,13 +26,13 @@ export default {
     currentVersion: s => s.version,
     mainMenu: s => s.mainMenu,
     userMenu: s => s.userMenu,
+    breadcrumbs: s => s.breadcrumbs,
     mainMenuShown: s => s.mainMenuShown,
-    notificationsShown: s => s.notificationsShown,
-    notifications: s => s.notifications,
-    unreadNotifications: s => s.unreadNotifications,
     canLeaveForm: s => s.canLeaveForm,
+    canLeaveFormToPreviousPage: s => s.canLeaveForm && !s.pushStateWasTriggered,
     canLeaveModal: s => s.canLeaveModal,
     validLicense: s => s.validLicense,
+    queryStringParams: s => s.queryStringParams,
   },
 
   mutations: {
@@ -48,14 +52,19 @@ export default {
       state.canLeaveModal = false
     },
 
+    triggerPushState(state) {
+      Inertia.pushState(Inertia.page)
+      Inertia.ignoreHistoryState = true
+      state.pushStateWasTriggered = true
+    },
+
+    resetPushState(state) {
+      state.pushStateWasTriggered = false
+    },
+
     toggleMainMenu(state) {
       state.mainMenuShown = !state.mainMenuShown
       localStorage.setItem('nova.mainMenu.open', state.mainMenuShown)
-    },
-
-    toggleNotifications(state) {
-      state.notificationsShown = !state.notificationsShown
-      localStorage.setItem('nova.mainMenu.open', state.notificationsShown)
     },
   },
 
@@ -113,14 +122,16 @@ export default {
       Nova.visit('/')
     },
 
-    async assignPropsFromInertia({ state }) {
+    async assignPropsFromInertia({ state, dispatch }) {
       let config = usePage().props.value.novaConfig || Nova.appConfig
       let { resources, base, version, mainMenu, userMenu } = config
 
       let user = usePage().props.value.currentUser
       let validLicense = usePage().props.value.validLicense
+      let breadcrumbs = usePage().props.value.breadcrumbs
 
       Nova.appConfig = config
+      state.breadcrumbs = breadcrumbs || []
       state.currentUser = user
       state.validLicense = validLicense
       state.resources = resources
@@ -128,34 +139,53 @@ export default {
       state.version = version
       state.mainMenu = mainMenu
       state.userMenu = userMenu
+
+      dispatch('syncQueryString')
     },
 
     async fetchPolicies({ state, dispatch }) {
       await dispatch('assignPropsFromInertia')
     },
 
-    async fetchNotifications({ state }) {
-      const {
-        data: { notifications, unread },
-      } = await Nova.request().get(`/nova-api/nova-notifications`)
+    async syncQueryString({ state }) {
+      let searchParams = new URLSearchParams(window.location.search)
 
-      state.notifications = notifications
-      state.unreadNotifications = unread
+      state.queryStringParams = Object.fromEntries(searchParams.entries())
+      state.compiledQueryStringParams = searchParams.toString()
     },
 
-    async markNotificationAsRead({ state, dispatch }, id) {
-      await Nova.request().post(`/nova-api/nova-notifications/${id}/read`)
-      dispatch('fetchNotifications')
-    },
+    async updateQueryString({ state }, value) {
+      let searchParams = new URLSearchParams(window.location.search)
+      let page = Inertia.page
 
-    async deleteNotification({ state, dispatch }, id) {
-      await Nova.request().delete(`/nova-api/nova-notifications/${id}/delete`)
-      dispatch('fetchNotifications')
-    },
+      forEach(value, (v, i) => {
+        if (!filled(v)) {
+          searchParams.delete(i)
+        } else {
+          searchParams.set(i, v || '')
+        }
+      })
 
-    async markAllNotificationsAsRead({ state, dispatch }, id) {
-      await Nova.request().post(`/nova-api/nova-notifications/read-all`)
-      dispatch('fetchNotifications')
+      if (state.compiledQueryStringParams !== searchParams.toString()) {
+        if (page.url !== `${window.location.pathname}?${searchParams}`) {
+          page.url = `${window.location.pathname}?${searchParams}`
+
+          window.history.pushState(
+            page,
+            '',
+            `${window.location.pathname}?${searchParams}`
+          )
+        }
+
+        state.compiledQueryStringParams = searchParams.toString()
+      }
+
+      Nova.$emit('query-string-changed', searchParams)
+      state.queryStringParams = Object.fromEntries(searchParams.entries())
+
+      return new Promise((resolve, reject) => {
+        resolve(searchParams)
+      })
     },
   },
 }

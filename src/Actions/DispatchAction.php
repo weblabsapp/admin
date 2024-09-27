@@ -45,7 +45,7 @@ class DispatchAction
     /**
      * Set dispatchable callback.
      *
-     * @var (callable(\Laravel\Nova\Actions\Response):mixed)|null
+     * @var (callable(\Laravel\Nova\Actions\Response):(mixed))|null
      */
     protected $dispatchableCallback;
 
@@ -247,7 +247,9 @@ class DispatchAction
             return $this->action->withActionBatchId($batchId)->{$method}($this->fields, $models);
         }, function ($batchId) {
             Nova::usingActionEvent(function ($actionEvent) use ($batchId) {
-                $actionEvent->markBatchAsFinished($batchId);
+                if (! $this->action->withoutActionEvents) {
+                    $actionEvent->markBatchAsFinished($batchId);
+                }
             });
         });
     }

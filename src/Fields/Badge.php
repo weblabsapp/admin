@@ -3,23 +3,15 @@
 namespace Laravel\Nova\Fields;
 
 use Exception;
+use Illuminate\Support\Arr;
+use Laravel\Nova\Badge as BadgeComponent;
+use Laravel\Nova\Contracts\FilterableField;
+use Laravel\Nova\Fields\Filters\SelectFilter;
+use Laravel\Nova\Http\Requests\NovaRequest;
 
-class Badge extends Field
+class Badge extends Field implements FilterableField, Unfillable
 {
-    /**
-     * Create a new field.
-     *
-     * @param  string  $name
-     * @param  string|\Closure|callable|object|null  $attribute
-     * @param  (callable(mixed, mixed, ?string):mixed)|null  $resolveCallback
-     * @return void
-     */
-    public function __construct($name, $attribute = null, callable $resolveCallback = null)
-    {
-        parent::__construct($name, $attribute, $resolveCallback);
-
-        $this->exceptOnForms();
-    }
+    use FieldFilterable;
 
     /**
      * The text alignment for the field's text in tables.
@@ -38,40 +30,71 @@ class Badge extends Field
     /**
      * The labels that should be applied to the field's possible values.
      *
-     * @var array
+     * @var array<array-key, string>
      */
     public $labels;
 
     /**
      * The callback used to determine the field's label.
      *
-     * @var callable|null
+     * @var (callable(mixed):(string))|null
      */
     public $labelCallback;
 
     /**
      * The mapping used for matching custom values to in-built badge types.
      *
-     * @var array
+     * @var array<array-key, string>
      */
     public $map;
 
     /**
+     * Indicates if the field should show icons.
+     *
+     * @var bool
+     */
+    public $withIcons = false;
+
+    /**
      * The built-in badge types and their corresponding CSS classes.
      *
-     * @var array<string, string>
+     * @var array<array-key, string>
      */
-    public $types = [
-        'success' => 'bg-green-100 text-green-600 dark:bg-green-500 dark:text-green-900',
-        'info' => 'bg-blue-100 text-blue-600 dark:bg-blue-600 dark:text-blue-900',
-        'danger' => 'bg-red-100 text-red-600 dark:bg-red-400 dark:text-red-900',
-        'warning' => 'bg-yellow-100 text-yellow-600 dark:bg-yellow-300 dark:text-yellow-800',
+    public $types = [];
+
+    /**
+     * The icons that should be applied to the field's possible values.
+     *
+     * @var array<array-key, string>
+     */
+    public $icons = [
+        'success' => 'check-circle',
+        'info' => 'information-circle',
+        'danger' => 'exclamation-circle',
+        'warning' => 'exclamation-circle',
     ];
+
+    /**
+     * Create a new field.
+     *
+     * @param  string  $name
+     * @param  string|\Closure|callable|object|null  $attribute
+     * @param  (callable(mixed, mixed, ?string):(mixed))|null  $resolveCallback
+     * @return void
+     */
+    public function __construct($name, $attribute = null, callable $resolveCallback = null)
+    {
+        parent::__construct($name, $attribute, $resolveCallback);
+
+        $this->addTypes(BadgeComponent::$types);
+
+        $this->exceptOnForms();
+    }
 
     /**
      * Add badge types and their corresponding CSS classes to the built-in ones.
      *
-     * @param  array<string, string>  $types
+     * @param  array<array-key, string>  $types
      * @return $this
      */
     public function addTypes(array $types)
@@ -84,7 +107,7 @@ class Badge extends Field
     /**
      * Set the badge types and their corresponding CSS classes.
      *
-     * @param  array<string, string>  $types
+     * @param  array<array-key, string>  $types
      * @return $this
      */
     public function types(array $types)
@@ -97,7 +120,7 @@ class Badge extends Field
     /**
      * Set the labels for each possible field value.
      *
-     * @param  array  $labels
+     * @param  array<array-key, string>  $labels
      * @return $this
      */
     public function labels(array $labels)
@@ -110,7 +133,7 @@ class Badge extends Field
     /**
      * Set the callback to be used to determine the field's displayable label.
      *
-     * @param  callable  $labelCallback
+     * @param  callable(mixed):string  $labelCallback
      * @return $this
      */
     public function label(callable $labelCallback)
@@ -123,12 +146,38 @@ class Badge extends Field
     /**
      * Map the possible field values to the built-in badge types.
      *
-     * @param  array  $map
+     * @param  array<array-key, string>  $map
      * @return $this
      */
     public function map(array $map)
     {
         $this->map = $map;
+
+        return $this;
+    }
+
+    /**
+     * Set the field to display icons, optionally passing an icon mapping.
+     *
+     * @return $this
+     */
+    public function withIcons()
+    {
+        $this->withIcons = true;
+
+        return $this;
+    }
+
+    /**
+     * Set the icons for each possible field value.
+     *
+     * @param  array<array-key, string>  $icons
+     * @return $this
+     */
+    public function icons($icons)
+    {
+        $this->withIcons = true;
+        $this->icons = $icons;
 
         return $this;
     }
@@ -158,11 +207,73 @@ class Badge extends Field
      */
     public function resolveLabel()
     {
+        return $this->resolveLabelFor($this->value);
+    }
+
+    /**
+     * Resolve the display label for the Badge.
+     *
+     * @param  string|int  $value
+     * @return string
+     */
+    protected function resolveLabelFor($value)
+    {
         if (isset($this->labelCallback)) {
-            return call_user_func($this->labelCallback, $this->value);
+            return call_user_func($this->labelCallback, $value);
         }
 
-        return $this->labels[$this->value] ?? $this->value;
+        return $this->labels[$value] ?? $value;
+    }
+
+    /**
+     * Make the field filter.
+     *
+     * @param  \Laravel\Nova\Http\Requests\NovaRequest  $request
+     * @return \Laravel\Nova\Fields\Filters\Filter
+     */
+    protected function makeFilter(NovaRequest $request)
+    {
+        return new SelectFilter($this);
+    }
+
+    /**
+     * Prepare the field for JSON serialization.
+     *
+     * @return array
+     */
+    public function serializeForFilter()
+    {
+        return transform(parent::jsonSerialize(), function ($field) {
+            /** @phpstan-ignore-next-line */
+            $options = collect($this->map)->keys()->transform(function ($value) {
+                return ['value' => $value, 'label' => $this->resolveLabelFor($value)];
+            })->all();
+
+            return array_merge(
+                Arr::only($field, [
+                    'uniqueKey',
+                    'name',
+                    'attribute',
+                ]),
+                ['options' => $options]
+            );
+        });
+    }
+
+    /**
+     * Resolve the display icon for the Badge.
+     *
+     * @return string
+     */
+    public function resolveIcon()
+    {
+        $mappedValue = $this->map[$this->value] ?? $this->value;
+
+        if (! isset($this->icons[$mappedValue])) {
+            throw new Exception("Error trying to find icon [{$mappedValue}] inside of the field's icon mapping.");
+        }
+
+        return $this->icons[$mappedValue];
     }
 
     /**
@@ -175,6 +286,7 @@ class Badge extends Field
         return array_merge(parent::jsonSerialize(), [
             'label' => $this->resolveLabel(),
             'typeClass' => $this->resolveBadgeClasses(),
+            'icon' => $this->withIcons ? $this->resolveIcon() : null,
         ]);
     }
 }

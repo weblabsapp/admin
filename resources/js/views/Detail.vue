@@ -41,18 +41,22 @@
       >
         <div v-if="panel.showToolbar" class="md:flex items-center mb-3">
           <div class="flex flex-auto truncate items-center">
-            <Heading :level="1" v-text="panel.name" />
+            <Heading
+              :level="1"
+              v-text="panel.name"
+              :dusk="`${panel.name}-detail-heading`"
+            />
             <Badge
               v-if="resource.softDeleted"
               :label="__('Soft Deleted')"
-              class="bg-red-100 text-red-500 rounded px-2 py-0.5 ml-3"
+              class="bg-red-100 text-red-500 dark:bg-red-400 dark:text-red-900 rounded px-2 py-0.5 ml-3"
             />
           </div>
 
           <div class="ml-auto flex items-center">
             <!-- Actions Menu -->
             <DetailActionDropdown
-              v-if="resource"
+              v-if="shouldShowActionDropdown"
               :resource="resource"
               :actions="actions"
               :via-resource="viaResource"
@@ -66,6 +70,24 @@
             />
 
             <Link
+              v-if="showViewLink"
+              v-tooltip="{
+                placement: 'bottom',
+                distance: 10,
+                skidding: 0,
+                content: __('View'),
+              }"
+              :href="$url(`/resources/${resourceName}/${resourceId}`)"
+              class="rounded hover:bg-gray-200 dark:hover:bg-gray-800 focus:outline-none focus:ring"
+              dusk="view-resource-button"
+              tabindex="1"
+            >
+              <BasicButton component="span">
+                <Icon type="eye" />
+              </BasicButton>
+            </Link>
+
+            <Link
               v-if="resource.authorizedToUpdate"
               v-tooltip="{
                 placement: 'bottom',
@@ -75,7 +97,6 @@
               }"
               :href="$url(`/resources/${resourceName}/${resourceId}/edit`)"
               class="rounded hover:bg-gray-200 dark:hover:bg-gray-800 focus:outline-none focus:ring"
-              data-testid="edit-resource"
               dusk="edit-resource-button"
               tabindex="1"
             >
@@ -99,19 +120,13 @@ import {
   mapProps,
 } from '@/mixins'
 import { minimum } from '@/util'
-import { mapActions } from 'vuex'
+import { mapGetters, mapActions } from 'vuex'
 
 export default {
   props: {
-    shouldOverrideMeta: {
-      type: Boolean,
-      default: false,
-    },
-
-    shouldEnableShortcut: {
-      type: Boolean,
-      default: false,
-    },
+    shouldOverrideMeta: { type: Boolean, default: false },
+    showViewLink: { type: Boolean, default: false },
+    shouldEnableShortcut: { type: Boolean, default: false },
 
     ...mapProps([
       'resourceName',
@@ -258,21 +273,27 @@ export default {
     /**
      * Get the available actions for the resource.
      */
-    getActions() {
+    async getActions() {
       this.actions = []
 
-      return Nova.request()
-        .get('/nova-api/' + this.resourceName + '/actions', {
-          params: {
-            resourceId: this.resourceId,
-            editing: true,
-            editMode: 'create',
-            display: 'detail',
-          },
-        })
-        .then(response => {
-          this.actions = response.data.actions
-        })
+      try {
+        const response = await Nova.request().get(
+          '/nova-api/' + this.resourceName + '/actions',
+          {
+            params: {
+              resourceId: this.resourceId,
+              editing: true,
+              editMode: 'create',
+              display: 'detail',
+            },
+          }
+        )
+
+        this.actions = response.data?.actions
+      } catch (error) {
+        console.log(error)
+        Nova.error(this.__('Unable to load actions for this resource'))
+      }
     },
 
     /**
@@ -294,11 +315,35 @@ export default {
   },
 
   computed: {
+    ...mapGetters(['currentUser']),
+
+    canBeImpersonated() {
+      return (
+        this.currentUser.canImpersonate && this.resource.authorizedToImpersonate
+      )
+    },
+
+    shouldShowActionDropdown() {
+      return (
+        this.resource && (this.actions.length > 0 || this.canModifyResource)
+      )
+    },
+
+    canModifyResource() {
+      return (
+        this.resource.authorizedToReplicate ||
+        this.canBeImpersonated ||
+        (this.resource.authorizedToDelete && !this.resource.softDeleted) ||
+        (this.resource.authorizedToRestore && this.resource.softDeleted) ||
+        this.resource.authorizedToForceDelete
+      )
+    },
+
     /**
      * Determine whether this is a detail view for an Action Event
      */
     isActionDetail() {
-      return this.resourceName == 'action-events'
+      return this.resourceName === 'action-events'
     },
 
     /**

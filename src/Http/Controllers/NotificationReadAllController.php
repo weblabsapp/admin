@@ -5,6 +5,7 @@ namespace Laravel\Nova\Http\Controllers;
 use Illuminate\Routing\Controller;
 use Laravel\Nova\Http\Requests\NotificationRequest;
 use Laravel\Nova\Notifications\Notification;
+use Laravel\Nova\Nova;
 
 class NotificationReadAllController extends Controller
 {
@@ -16,7 +17,7 @@ class NotificationReadAllController extends Controller
      */
     public function __invoke(NotificationRequest $request)
     {
-        Notification::unread()->whereNotifiableId($request->user()->getKey())->update(['read_at' => now()]);
+        Notification::unread()->whereNotifiableId(Nova::user($request)->getKey())->update(['read_at' => now()]);
 
         return response()->json();
     }

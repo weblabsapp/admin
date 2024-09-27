@@ -2,29 +2,35 @@
   <div :class="`text-${field.textAlign}`">
     <Link
       @click.stop
-      v-if="hasValue && resource.authorizedToView"
+      v-if="fieldHasValue && !isPivot && authorizedToView"
       :href="$url(`/resources/${resourceName}/${field.value}`)"
-      class="no-underline text-primary-500 hover:text-primary-400 focus:text-primary-600 font-bold"
+      class="link-default"
     >
-      {{ field.pivotValue || field.value }}
+      {{ fieldValue }}
     </Link>
-    <p v-else-if="hasValue">
-      {{ field.pivotValue || field.value }}
+    <p v-else-if="fieldHasValue || isPivot">
+      {{ field.pivotValue || fieldValue }}
     </p>
     <p v-else>&mdash;</p>
   </div>
 </template>
 
 <script>
+import isNil from 'lodash/isNil'
+import { FieldValue } from '@/mixins'
+
 export default {
+  mixins: [FieldValue],
+
   props: ['resource', 'resourceName', 'field'],
 
   computed: {
-    /**
-     * Determine if the field has a value other than null.
-     */
-    hasValue() {
-      return this.field.value !== null
+    isPivot() {
+      return !isNil(this.field.pivotValue)
+    },
+
+    authorizedToView() {
+      return this.resource?.authorizedToView ?? false
     },
   },
 }

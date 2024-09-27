@@ -1,31 +1,45 @@
 <template>
   <Modal
     :show="show"
-    @showing="handleShowingModal"
     @close-via-escape="handlePreventModalAbandonmentOnClose"
-    data-testid="confirm-action-modal"
-    tabindex="-1"
     role="dialog"
+    :size="action.modalSize"
+    :modal-style="action.modalStyle"
+    :use-focus-trap="usesFocusTrap"
   >
     <form
       ref="theForm"
       autocomplete="off"
       @change="onUpdateFormStatus"
       @submit.prevent.stop="$emit('confirm')"
-      class="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden"
+      :data-form-unique-id="formUniqueId"
+      class="bg-white dark:bg-gray-800"
+      :class="{
+        'rounded-lg shadow-lg overflow-hidden space-y-6':
+          action.modalStyle === 'window',
+        'flex flex-col justify-between h-full':
+          action.modalStyle === 'fullscreen',
+      }"
     >
-      <div>
+      <div
+        class="space-y-6"
+        :class="{
+          'overflow-hidden overflow-y-auto': action.modalStyle === 'fullscreen',
+        }"
+      >
         <ModalHeader v-text="action.name" />
 
-        <p v-if="action.fields.length == 0" class="px-8 my-8">
+        <!-- Confirmation Text -->
+        <p
+          v-if="action.confirmText"
+          class="px-8"
+          :class="{ 'text-red-500': action.destructive }"
+        >
           {{ action.confirmText }}
         </p>
 
-        <div v-else>
-          <!-- Validation Errors -->
-          <validation-errors :errors="errors" />
-
-          <!-- Action Fields -->
+        <!-- Action Fields -->
+        <div v-if="action.fields.length > 0">
           <div
             class="action"
             v-for="field in action.fields"
@@ -36,8 +50,15 @@
               :errors="errors"
               :resource-name="resourceName"
               :field="field"
-              :show-help-text="field.helpText != null"
-              @field-changed="onUpdateFormStatus"
+              :show-help-text="true"
+              :form-unique-id="formUniqueId"
+              :mode="
+                action.modalStyle === 'fullscreen'
+                  ? 'action-fullscreen'
+                  : 'action-modal'
+              "
+              :sync-endpoint="syncEndpoint"
+              @field-changed="onUpdateFieldStatus"
             />
           </div>
         </div>
@@ -51,18 +72,20 @@
             dusk="cancel-action-button"
             class="ml-auto mr-3"
             @click="$emit('close')"
-          />
+          >
+            {{ action.cancelButtonText }}
+          </CancelButton>
 
-          <LoadingButton
+          <Button
             type="submit"
             ref="runButton"
             dusk="confirm-action-button"
-            :disabled="working"
             :loading="working"
-            :component="action.destructive ? 'DangerButton' : 'DefaultButton'"
+            variant="solid"
+            :state="action.destructive ? 'danger' : 'default'"
           >
             {{ action.confirmButtonText }}
-          </LoadingButton>
+          </Button>
         </div>
       </ModalFooter>
     </form>
@@ -71,23 +94,40 @@
 
 <script>
 import { PreventsModalAbandonment } from '@/mixins'
+import isObject from 'lodash/isObject'
+import { uid } from 'uid/single'
+import { Button } from 'laravel-nova-ui'
 
 export default {
+  components: {
+    Button,
+  },
+
   emits: ['confirm', 'close'],
 
   mixins: [PreventsModalAbandonment],
 
   props: {
+    action: { type: Object, required: true },
+    endpoint: { type: String, required: false },
+    errors: { type: Object, required: true },
+    resourceName: { type: String, required: true },
+    selectedResources: { type: [Array, String], required: true },
     show: { type: Boolean, default: false },
     working: Boolean,
-    resourceName: { type: String, required: true },
-    action: { type: Object, required: true },
-    selectedResources: { type: [Array, String], required: true },
-    errors: { type: Object, required: true },
   },
+
+  data: () => ({
+    loading: true,
+    formUniqueId: uid(),
+  }),
 
   created() {
     document.addEventListener('keydown', this.handleKeydown)
+  },
+
+  mounted() {
+    this.loading = false
   },
 
   beforeUnmount() {
@@ -102,36 +142,46 @@ export default {
       this.updateModalStatus()
     },
 
-    /**
-     * Handle focus when modal being shown.
-     */
-    handleShowingModal(e) {
-      // If the modal has inputs, let's highlight the first one, otherwise
-      // let's highlight the submit button
-      this.$nextTick(() => {
-        if (this.$refs.theForm) {
-          let formFields = this.$refs.theForm.querySelectorAll(
-            'input, textarea, select'
-          )
-
-          formFields.length > 0
-            ? formFields[0].focus()
-            : this.$refs.runButton.focus()
-        } else {
-          this.$refs.runButton.focus()
-        }
-      })
+    onUpdateFieldStatus() {
+      this.onUpdateFormStatus()
     },
 
-    handlePreventModalAbandonmentOnClose() {
+    handlePreventModalAbandonmentOnClose(event) {
       this.handlePreventModalAbandonment(
         () => {
           this.$emit('close')
         },
         () => {
-          e.stopPropagation()
+          event.stopPropagation()
         }
       )
+    },
+  },
+
+  computed: {
+    syncEndpoint() {
+      let searchParams = new URLSearchParams({ action: this.action.uriKey })
+
+      if (this.selectedResources === 'all') {
+        searchParams.append('resources', 'all')
+      } else {
+        this.selectedResources.forEach(resource => {
+          searchParams.append(
+            'resources[]',
+            isObject(resource) ? resource.id.value : resource
+          )
+        })
+      }
+
+      return (
+        (this.endpoint || `/nova-api/${this.resourceName}/action`) +
+        '?' +
+        searchParams.toString()
+      )
+    },
+
+    usesFocusTrap() {
+      return this.loading === false && this.action.fields.length > 0
     },
   },
 }

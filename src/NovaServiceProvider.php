@@ -51,9 +51,15 @@ class NovaServiceProvider extends ServiceProvider
             __DIR__.'/../resources/lang' => lang_path('vendor/nova'),
         ], 'nova-lang');
 
-        $this->publishes([
-            __DIR__.'/../database/migrations' => database_path('migrations'),
-        ], 'nova-migrations');
+        if (method_exists($this, 'publishesMigrations')) {
+            $this->publishesMigrations([
+                __DIR__.'/../database/migrations' => database_path('migrations'),
+            ], Nova::runsMigrations() ? 'nova-migrations' : null);
+        } else {
+            $this->publishes([
+                __DIR__.'/../database/migrations' => database_path('migrations'),
+            ], 'nova-migrations');
+        }
     }
 
     /**
@@ -101,9 +107,11 @@ class NovaServiceProvider extends ServiceProvider
             Console\PartitionCommand::class,
             Console\ProgressCommand::class,
             Console\PublishCommand::class,
+            Console\RepeatableCommand::class,
             Console\ResourceCommand::class,
             Console\ResourceToolCommand::class,
             Console\StubPublishCommand::class,
+            Console\TableCommand::class,
             Console\TranslateCommand::class,
             Console\ToolCommand::class,
             Console\TrendCommand::class,
@@ -121,6 +129,7 @@ class NovaServiceProvider extends ServiceProvider
     protected function registerCollectionMacros()
     {
         Collection::macro('isAssoc', function () {
+            /** @phpstan-ignore-next-line */
             return Arr::isAssoc($this->toBase()->all());
         });
     }

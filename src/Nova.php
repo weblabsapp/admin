@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Laravel\Nova\Actions\ActionResource;
+use Laravel\Nova\Contracts\ImpersonatesUsers;
 use Laravel\Nova\Exceptions\ResourceMissingException;
 use Laravel\Nova\Http\Middleware\RedirectIfAuthenticated;
 use Laravel\Nova\Http\Requests\NovaRequest;
@@ -20,6 +21,9 @@ use Laravel\Nova\Menu\Menu;
 use ReflectionClass;
 use Symfony\Component\Finder\Finder;
 
+/**
+ * @method static bool runsMigrations()
+ */
 class Nova
 {
     use AuthorizesRequests;
@@ -51,21 +55,28 @@ class Nova
     /**
      * The callback used to create new users via the CLI.
      *
-     * @var (\Closure(string, string, string):\Illuminate\Database\Eloquent\Model)|null
+     * @var (\Closure(string, string, string):(\Illuminate\Database\Eloquent\Model))|null
      */
     public static $createUserCallback;
 
     /**
      * The callback used to gather new user information via the CLI.
      *
-     * @var (\Closure(\Illuminate\Console\Command):array)|null
+     * @var (\Closure(\Illuminate\Console\Command):(array))|null
      */
     public static $createUserCommandCallback;
 
     /**
+     * The callable that resolves the user's locale.
+     *
+     * @var (\Closure(\Illuminate\Http\Request):(?string))|null
+     */
+    public static $userLocaleCallback;
+
+    /**
      * The callable that resolves the user's timezone.
      *
-     * @var (\Closure(\Illuminate\Http\Request):?string)|null
+     * @var (\Closure(\Illuminate\Http\Request):(?string))|null
      */
     public static $userTimezoneCallback;
 
@@ -100,7 +111,7 @@ class Nova
     /**
      * The callback used to report Nova's exceptions.
      *
-     * @var (\Closure(\Throwable):void)|(callable(\Throwable):void)|null
+     * @var (\Closure(\Throwable):(void))|(callable(\Throwable):(void))|null
      */
     public static $reportCallback;
 
@@ -121,7 +132,7 @@ class Nova
     /**
      * The callback used to sort Nova resources in the sidebar.
      *
-     * @var (\Closure(string):mixed)|null
+     * @var (\Closure(string):(mixed))|null
      */
     public static $sortCallback;
 
@@ -135,28 +146,42 @@ class Nova
     /**
      * The callback used to create Nova's main menu.
      *
-     * @var (\Closure(\Illuminate\Http\Request, \Laravel\Nova\Menu\Menu):\Laravel\Nova\Menu\Menu|array)|null
+     * @var (\Closure(\Illuminate\Http\Request, \Laravel\Nova\Menu\Menu):(\Laravel\Nova\Menu\Menu|array))|null
      */
     public static $mainMenuCallback;
 
     /**
      * The callback used to create Nova's user menu.
      *
-     * @var (\Closure(\Illuminate\Http\Request, \Laravel\Nova\Menu\Menu):\Laravel\Nova\Menu\Menu|array)|null
+     * @var (\Closure(\Illuminate\Http\Request, \Laravel\Nova\Menu\Menu):(\Laravel\Nova\Menu\Menu|array))|null
      */
     public static $userMenuCallback;
 
     /**
      * The callback used to resolve Nova's footer.
      *
-     * @var (\Closure(\Illuminate\Http\Request):string)|null
+     * @var (\Closure(\Illuminate\Http\Request):(string))|null
      */
     public static $footerCallback;
 
     /**
+     * The callback used to resolve Nova's RTL.
+     *
+     * @var (\Closure(\Laravel\Nova\Http\Requests\NovaRequest):(bool))|bool|null
+     */
+    public static $rtlCallback;
+
+    /**
+     * The callback used to resolve Nova's Breadcrumb.
+     *
+     * @var (\Closure(\Laravel\Nova\Http\Requests\NovaRequest):(bool))|bool|null
+     */
+    public static $withBreadcrumbs;
+
+    /**
      * The initial path Nova should route to when visiting the base.
      *
-     * @var string
+     * @var string|(\Closure(\Illuminate\Http\Request):(string|null))
      */
     public static $initialPath = '/dashboards/main';
 
@@ -203,6 +228,13 @@ class Nova
     public static $withThemeSwitcher = true;
 
     /**
+     * Indicates if Nova's notification center should show unread count.
+     *
+     * @var bool
+     */
+    public static $showUnreadCountInNotificationCenter = false;
+
+    /**
      * Get the current Nova version.
      *
      * @return string
@@ -232,7 +264,7 @@ class Nova
      * Run callback when currently serving Nova.
      *
      * @param  callable(\Laravel\Nova\Http\Requests\NovaRequest):mixed  $callback
-     * @param  (callable(\Illuminate\Http\Request):mixed)|null  $default
+     * @param  (callable(\Illuminate\Http\Request):(mixed))|null  $default
      * @return mixed
      */
     public static function whenServing(callable $callback, callable $default = null)
@@ -247,6 +279,23 @@ class Nova
     }
 
     /**
+     * Get current user using `nova.guard`.
+     *
+     * @param  \Illuminate\Http\Request|null  $request
+     * @return \Illuminate\Foundation\Auth\User|null
+     */
+    public static function user(Request $request = null)
+    {
+        $guard = config('nova.guard');
+
+        if (is_null($request)) {
+            return call_user_func(app('auth')->userResolver(), $guard);
+        }
+
+        return $request->user($guard);
+    }
+
+    /**
      * Register the Nova routes.
      *
      * @return \Laravel\Nova\PendingRouteRegistration
@@ -256,6 +305,16 @@ class Nova
         Route::aliasMiddleware('nova.guest', RedirectIfAuthenticated::class);
 
         return new PendingRouteRegistration();
+    }
+
+    /**
+     * Retrieve Nova's Impersonator Implementation.
+     *
+     * @return \Laravel\Nova\Contracts\ImpersonatesUsers
+     */
+    public static function impersonator()
+    {
+        return app(ImpersonatesUsers::class);
     }
 
     /**
@@ -300,7 +359,7 @@ class Nova
      * Return Nova's authorized resources.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @return \Laravel\Nova\ResourceCollection
+     * @return \Laravel\Nova\ResourceCollection<int, class-string<\Laravel\Nova\Resource>>
      */
     public static function authorizedResources(Request $request)
     {
@@ -310,7 +369,7 @@ class Nova
     /**
      * Return the base collection of Nova resources.
      *
-     * @return \Laravel\Nova\ResourceCollection
+     * @return \Laravel\Nova\ResourceCollection<int, class-string<\Laravel\Nova\Resource>>
      */
     private static function resourceCollection()
     {
@@ -332,7 +391,7 @@ class Nova
     /**
      * Replace the registered resources with the given resources.
      *
-     * @param  array  $resources
+     * @param  array<int, class-string<\Laravel\Nova\Resource>>  $resources
      * @return static
      */
     public static function replaceResources(array $resources)
@@ -417,7 +476,7 @@ class Nova
             if (
                 is_subclass_of($resource, Resource::class) &&
                 ! (new ReflectionClass($resource))->isAbstract() &&
-                ! (is_subclass_of($resource, ActionResource::class))
+                ! is_subclass_of($resource, ActionResource::class)
             ) {
                 $resources[] = $resource;
             }
@@ -431,7 +490,7 @@ class Nova
     /**
      * Register the given resources.
      *
-     * @param  array  $resources
+     * @param  array<int, class-string<\Laravel\Nova\Resource>>  $resources
      * @return static
      */
     public static function resources(array $resources)
@@ -543,8 +602,8 @@ class Nova
     /**
      * Register the callbacks used to create a new user via the CLI.
      *
-     * @param  \Closure(\Illuminate\Console\Command):array  $createUserCommandCallback
-     * @param  \Closure(string, string, string):\Illuminate\Database\Eloquent\Model  $createUserCallback
+     * @param  (\Closure(\Illuminate\Console\Command):(array))|null  $createUserCommandCallback
+     * @param  (\Closure(string, string, string):(\Illuminate\Database\Eloquent\Model))|null  $createUserCallback
      * @return static
      */
     public static function createUserUsing($createUserCommandCallback = null, $createUserCallback = null)
@@ -600,7 +659,7 @@ class Nova
     /**
      * Set the callable that resolves the user's preferred timezone.
      *
-     * @param  (callable(\Illuminate\Http\Request):?string)|null  $userTimezoneCallback
+     * @param  (callable(\Illuminate\Http\Request):(?string))|null  $userTimezoneCallback
      * @return static
      */
     public static function userTimezone($userTimezoneCallback)
@@ -668,7 +727,7 @@ class Nova
      */
     public static function availableTools(Request $request)
     {
-        if (is_null($request->user())) {
+        if (is_null(static::user($request))) {
             return [];
         }
 
@@ -689,7 +748,7 @@ class Nova
     /**
      * Register the dashboards.
      *
-     * @param  array  $dashboards
+     * @param  array<int, \Laravel\Nova\Dashboard>  $dashboards
      * @return static
      */
     public static function dashboards(array $dashboards)
@@ -711,6 +770,7 @@ class Nova
             ->filter
             ->authorize($request)
             ->flatMap(function ($dashboard) {
+                /** @var \Laravel\Nova\Dashboard $dashboard */
                 return $dashboard->cards();
             })->unique()
             ->filter
@@ -769,7 +829,7 @@ class Nova
      */
     public static function availableScripts(Request $request)
     {
-        if (is_null($request->user())) {
+        if (is_null(static::user($request))) {
             return [];
         }
 
@@ -794,7 +854,7 @@ class Nova
      */
     public static function availableStyles(Request $request)
     {
-        if (is_null($request->user())) {
+        if (is_null(static::user($request))) {
             return [];
         }
 
@@ -927,7 +987,7 @@ class Nova
     /**
      * Register the callback used to set a custom Nova error reporter.
      *
-     * @param  (\Closure(\Throwable):void)|(callable(\Throwable):void)|null  $callback
+     * @param  (\Closure(\Throwable):(void))|(callable(\Throwable):(void))|null  $callback
      * @return static
      */
     public static function report($callback)
@@ -949,8 +1009,18 @@ class Nova
             $userId = Auth::guard(config('nova.guard'))->id() ?? null;
 
             static::$jsonVariables = [
+                'debug' => function () {
+                    return config('app.debug') || app()->environment('testing');
+                },
                 'logo' => static::logo(),
-                'brandColors' => config('nova.brand.colors', []),
+                'brandColors' => static::brandColors(),
+                'brandColorsCSS' => static::brandColorsCSS(),
+                'rtlEnabled' => function () {
+                    return static::rtlEnabled();
+                },
+                'breadcrumbsEnabled' => function () {
+                    return static::breadcrumbsEnabled();
+                },
                 'globalSearchEnabled' => function () {
                     return static::globalSearchIsEnabled() && static::hasGloballySearchableResources();
                 },
@@ -963,6 +1033,9 @@ class Nova
                 'themeSwitcherEnabled' => function () {
                     return static::$withThemeSwitcher;
                 },
+                'showUnreadCountInNotificationCenter' => function () {
+                    return static::$showUnreadCountInNotificationCenter;
+                },
                 'withAuthentication' => static::$withAuthentication,
                 'withPasswordReset' => static::$withPasswordReset,
                 'customLoginPath' => config('nova.routes.login', false),
@@ -970,7 +1043,9 @@ class Nova
                 'forgotPasswordPath' => config('nova.routes.forgot_password', false),
                 'resetPasswordPath' => config('nova.routes.reset_password', false),
                 'debounce' => static::$debounce * 1000,
-                'initialPath' => static::$initialPath,
+                'initialPath' => function ($request) {
+                    return static::resolveInitialPath($request);
+                },
                 'base' => static::path(),
                 'userId' => $userId,
                 'mainMenu' => function ($request) use ($userId) {
@@ -1033,6 +1108,33 @@ class Nova
         }
 
         return $logo;
+    }
+
+    /**
+     * Get Nova's content direction.
+     *
+     * @return bool
+     */
+    public static function rtlEnabled()
+    {
+        if (is_callable(static::$rtlCallback)) {
+            static::$rtlCallback = value(static::$rtlCallback, app(NovaRequest::class));
+        }
+
+        return (bool) static::$rtlCallback;
+    }
+
+    /**
+     * Enable RTL content direction.
+     *
+     * @param  (\Closure(\Laravel\Nova\Http\Requests\NovaRequest):(bool))|bool  $rtlCallback
+     * @return static
+     */
+    public static function enableRTL($rtlCallback = true)
+    {
+        static::$rtlCallback = $rtlCallback;
+
+        return new static;
     }
 
     /**
@@ -1150,6 +1252,7 @@ class Nova
     public static function resourceInformation(Request $request)
     {
         return static::resourceCollection()->map(function ($resource) use ($request) {
+            /** @var class-string<\Laravel\Nova\Resource> $resource */
             return array_merge([
                 'uriKey' => $resource::uriKey(),
                 'label' => $resource::label(),
@@ -1162,6 +1265,7 @@ class Nova
                 'tableStyle' => $resource::tableStyle(),
                 'showColumnBorders' => $resource::showColumnBorders(),
                 'debounce' => $resource::$debounce * 1000,
+                'clickAction' => $resource::$clickAction,
             ], $resource::additionalInformation($request));
         })->values()->all();
     }
@@ -1213,7 +1317,7 @@ class Nova
     /**
      * Set the main menu for Nova.
      *
-     * @param  (\Closure(\Illuminate\Http\Request, \Laravel\Nova\Menu\Menu):\Laravel\Nova\Menu\Menu|array)  $callback
+     * @param  \Closure(\Illuminate\Http\Request, \Laravel\Nova\Menu\Menu):(\Laravel\Nova\Menu\Menu|array)  $callback
      * @return static
      */
     public static function mainMenu($callback)
@@ -1226,7 +1330,7 @@ class Nova
     /**
      * Set the initial route path when visiting the base Nova url.
      *
-     * @param  string  $path
+     * @param  string|(\Closure(\Illuminate\Http\Request):(string|null))  $path
      * @return static
      */
     public static function initialPath($path)
@@ -1239,7 +1343,7 @@ class Nova
     /**
      * Set the main menu for Nova.
      *
-     * @param  (\Closure(\Illuminate\Http\Request, \Laravel\Nova\Menu\Menu):\Laravel\Nova\Menu\Menu|array)  $userMenuCallback
+     * @param  \Closure(\Illuminate\Http\Request, \Laravel\Nova\Menu\Menu):(\Laravel\Nova\Menu\Menu|array)  $userMenuCallback
      * @return static
      */
     public static function userMenu($userMenuCallback)
@@ -1247,6 +1351,31 @@ class Nova
         static::$userMenuCallback = $userMenuCallback;
 
         return new static();
+    }
+
+    /**
+     * Enable Breadcrumb Menu.
+     *
+     * @param  (\Closure(\Laravel\Nova\Http\Requests\NovaRequest):(bool))|bool  $withBreadcrumbs
+     * @return static
+     */
+    public static function withBreadcrumbs($withBreadcrumbs = true)
+    {
+        static::$withBreadcrumbs = $withBreadcrumbs;
+
+        return new static;
+    }
+
+    /**
+     * Determine if Nova's breadcrumbs menu should be displayed.
+     *
+     * @return bool
+     */
+    public static function breadcrumbsEnabled()
+    {
+        return is_callable(static::$withBreadcrumbs)
+            ? call_user_func(static::$withBreadcrumbs, app(NovaRequest::class))
+            : static::$withBreadcrumbs;
     }
 
     /**
@@ -1265,7 +1394,7 @@ class Nova
     /**
      * Set the footer text used for Nova.
      *
-     * @param  (\Closure(\Illuminate\Http\Request):string)  $footerCallback
+     * @param  \Closure(\Illuminate\Http\Request):string  $footerCallback
      * @return static
      */
     public static function footer($footerCallback)
@@ -1299,9 +1428,12 @@ class Nova
     public static function defaultFooter(Request $request)
     {
         return Blade::render('
-            <p class="text-center">Powered by {!! "<a class=\'link-default\' href=\'https://nova.laravel.com\'>Laravel Nova</a>" !!} · v{!! \Laravel\Nova\Nova::version() !!}</p>
-            <p class="text-center">&copy; {!! date(\'Y\') !!} Laravel LLC &middot; by Taylor Otwell and David Hemphill.</p>
-        ');
+            <p class="text-center">Powered by <a class="link-default" href="https://nova.laravel.com">Laravel Nova</a> · v{!! $version !!}</p>
+            <p class="text-center">&copy; {!! $year !!} Laravel Holdings Inc.</p>
+        ', [
+            'version' => static::version(),
+            'year' => date('Y'),
+        ]);
     }
 
     /**
@@ -1336,6 +1468,106 @@ class Nova
     public static function withoutThemeSwitcher()
     {
         static::$withThemeSwitcher = false;
+
+        return new static;
+    }
+
+    /**
+     * Return Nova's custom brand colors.
+     *
+     * @return array
+     */
+    public static function brandColors()
+    {
+        return collect(config('nova.brand.colors'))->reject(function ($value, $key) {
+            return is_null($value);
+        })->all();
+    }
+
+    /**
+     * Return the CSS used to override Nova's brand colors.
+     *
+     * @return string
+     */
+    public static function brandColorsCSS()
+    {
+        return Blade::render('
+:root {
+@foreach($colors as $key => $value)
+    --colors-primary-{{ $key }}: {{ $value }};
+@endforeach
+}', [
+            'colors' => static::brandColors(),
+        ]);
+    }
+
+    /**
+     * Set the callable that resolves the user's preferred locale.
+     *
+     * @param  (callable(\Illuminate\Http\Request):(?string))|null  $userLocaleCallback
+     * @return static
+     */
+    public static function userLocale($userLocaleCallback)
+    {
+        static::$userLocaleCallback = $userLocaleCallback;
+
+        return new static();
+    }
+
+    /**
+     * Resolve the user's preferred locale.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return string
+     */
+    public static function resolveUserLocale(Request $request)
+    {
+        $locale = null;
+
+        if (static::$userLocaleCallback) {
+            $locale = call_user_func(static::$userLocaleCallback, $request);
+        }
+
+        return str_replace('_', '-', $locale ?? app()->getLocale());
+    }
+
+    /**
+     * Resolve the user's initial path.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return string
+     */
+    public static function resolveInitialPath(Request $request)
+    {
+        /** @phpstan-ignore-next-line */
+        return value(static::$initialPath, $request) ?? '/dashboards/main';
+    }
+
+    /**
+     * Translate the given message.
+     *
+     * @param  \Laravel\Nova\Support\PendingTranslation|string|null  $key
+     * @param  array<string, string>  $replace
+     * @param  string|null  $locale
+     * @return \Laravel\Nova\Support\PendingTranslation&\Stringable
+     */
+    public static function __($key = null, $replace = [], $locale = null)
+    {
+        if ($key instanceof Support\PendingTranslation) {
+            return $key;
+        }
+
+        return new Support\PendingTranslation($key, $replace, $locale);
+    }
+
+    /**
+     * Enable unread notifications count in the notification center.
+     *
+     * @return static
+     */
+    public static function showUnreadCountInNotificationCenter()
+    {
+        static::$showUnreadCountInNotificationCenter = true;
 
         return new static;
     }

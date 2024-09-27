@@ -15,6 +15,7 @@
       v-if="panels"
       @submit="submitViaUpdateResource"
       @change="onUpdateFormStatus"
+      :data-form-unique-id="formUniqueId"
       autocomplete="off"
       ref="form"
     >
@@ -24,6 +25,7 @@
           :key="panel.id"
           :is="'form-' + panel.component"
           @update-last-retrieved-at-timestamp="updateLastRetrievedAtTimestamp"
+          @file-deleted="handleFileDeleted"
           @field-changed="onUpdateFormStatus"
           @file-upload-started="handleFileUploadStarted"
           @file-upload-finished="handleFileUploadFinished"
@@ -38,39 +40,37 @@
           :via-resource="viaResource"
           :via-resource-id="viaResourceId"
           :via-relationship="viaRelationship"
+          :show-help-text="true"
         />
       </div>
 
       <!-- Update Button -->
       <div
-        class="flex flex-col md:flex-row md:items-center justify-center md:justify-end space-y-2 md:space-y-0 space-x-3"
+        class="flex flex-col md:flex-row md:items-center justify-center md:justify-end space-y-2 md:space-y-0 md:space-x-3"
       >
-        <CancelButton
+        <Button
           dusk="cancel-update-button"
-          type="button"
-          align="center"
+          variant="ghost"
+          :label="__('Cancel')"
           @click="cancelUpdatingResource"
+          :disabled="isWorking"
         />
 
-        <LoadingButton
+        <Button
           dusk="update-and-continue-editing-button"
           @click="submitViaUpdateResourceAndContinueEditing"
           :disabled="isWorking"
-          align="center"
-          :processing="wasSubmittedViaUpdateResourceAndContinueEditing"
-        >
-          {{ __('Update & Continue Editing') }}
-        </LoadingButton>
+          :loading="wasSubmittedViaUpdateResourceAndContinueEditing"
+          :label="__('Update & Continue Editing')"
+        />
 
-        <LoadingButton
+        <Button
           dusk="update-button"
           type="submit"
           :disabled="isWorking"
-          align="center"
-          :processing="wasSubmittedViaUpdateResource"
-        >
-          {{ updateButtonLabel }}
-        </LoadingButton>
+          :loading="wasSubmittedViaUpdateResource"
+          :label="updateButtonLabel"
+        />
       </div>
     </form>
   </LoadingView>
@@ -80,7 +80,6 @@
 import each from 'lodash/each'
 import tap from 'lodash/tap'
 import {
-  Errors,
   HandlesFormRequest,
   HandlesUploads,
   InteractsWithResourceInformation,
@@ -89,13 +88,25 @@ import {
 } from '@/mixins'
 import { mapActions } from 'vuex'
 
+import { Button } from 'laravel-nova-ui'
+
 export default {
+  components: {
+    Button,
+  },
+
   mixins: [
     HandlesFormRequest,
     HandlesUploads,
     InteractsWithResourceInformation,
     PreventsFormAbandonment,
   ],
+
+  provide() {
+    return {
+      removeFile: this.removeFile,
+    }
+  },
 
   props: mapProps([
     'resourceName',
@@ -122,8 +133,9 @@ export default {
     // If this update is via a relation index, then let's grab the field
     // and use the label for that as the one we use for the title and buttons
     if (this.isRelation) {
-      const { data } = await Nova.request(
-        `/nova-api/${this.viaResource}/field/${this.viaRelationship}`
+      const { data } = await Nova.request().get(
+        `/nova-api/${this.viaResource}/field/${this.viaRelationship}`,
+        { params: { relatable: true } }
       )
       this.relationResponse = data
     }
@@ -135,6 +147,18 @@ export default {
 
   methods: {
     ...mapActions(['fetchPolicies']),
+
+    handleFileDeleted() {
+      //
+    },
+
+    removeFile(attribute) {
+      const { resourceName, resourceId } = this
+
+      Nova.request().delete(
+        `/nova-api/${resourceName}/${resourceId}/field/${attribute}`
+      )
+    },
 
     /**
      * Handle resource loaded event.
@@ -207,7 +231,11 @@ export default {
       this.handleProceedingToPreviousPage()
       this.allowLeavingForm()
 
-      return window.history.back()
+      this.proceedToPreviousPage(
+        this.isRelation
+          ? `/resources/${this.viaResource}/${this.viaResourceId}`
+          : `/resources/${this.resourceName}/${this.resourceId}`
+      )
     },
 
     /**
@@ -243,10 +271,14 @@ export default {
             if (id != this.resourceId) {
               Nova.visit(`/resources/${this.resourceName}/${id}/edit`)
             } else {
+              window.scrollTo(0, 0)
+
+              this.disableNavigateBackUsingHistory()
+
               // Reset the form by refetching the fields
               this.getFields()
 
-              this.validationErrors = new Errors()
+              this.resetErrors()
               this.submittedViaUpdateResource = false
               this.submittedViaUpdateResourceAndContinueEditing = false
               this.isWorking = false

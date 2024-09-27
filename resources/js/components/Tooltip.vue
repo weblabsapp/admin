@@ -6,7 +6,10 @@
     :placement="placement"
     :boundary="boundary"
     :prevent-overflow="preventOverflow"
-    theme="Nova"
+    :handle-resize="true"
+    :theme="theme"
+    @show="$emit('tooltip-show')"
+    @hide="$emit('tooltip-hide')"
   >
     <span>
       <slot />
@@ -23,6 +26,8 @@ import { PopperWrapper } from 'floating-vue'
 
 export default {
   ...PopperWrapper,
+
+  emits: ['tooltip-show', 'tooltip-hide'],
 
   props: {
     distance: {
@@ -53,6 +58,11 @@ export default {
     preventOverflow: {
       type: Boolean,
       default: true,
+    },
+
+    theme: {
+      type: String,
+      default: 'Nova',
     },
   },
 }

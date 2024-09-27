@@ -1,5 +1,8 @@
 <template>
-  <IconArrow class="transform" :class="{ '-rotate-90': collapsed }" />
+  <IconArrow
+    class="transform"
+    :class="{ 'ltr:-rotate-90 rtl:rotate-90': collapsed }"
+  />
 </template>
 
 <script>

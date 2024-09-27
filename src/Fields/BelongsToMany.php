@@ -21,13 +21,15 @@ use Laravel\Nova\TrashedStatus;
  */
 class BelongsToMany extends Field implements DeletableContract, FilterableField, ListableField, PivotableField, RelatableField
 {
-    use Deletable,
-        DeterminesIfCreateRelationCanBeShown,
-        DetachesPivotModels,
-        EloquentFilterable,
-        FormatsRelatableDisplayValues,
-        ManyToManyCreationRules,
-        Searchable;
+    use AttachableRelation;
+    use Collapsable;
+    use Deletable;
+    use DetachesPivotModels;
+    use DeterminesIfCreateRelationCanBeShown;
+    use EloquentFilterable;
+    use FormatsRelatableDisplayValues;
+    use ManyToManyCreationRules;
+    use Searchable;
 
     /**
      * The field's component.
@@ -206,9 +208,9 @@ class BelongsToMany extends Field implements DeletableContract, FilterableField,
         $request->first === 'true'
                         ? $query->whereKey($model->newQueryWithoutScopes(), $request->current)
                         : $query->search(
-                                $request, $model->newQuery(), $request->search,
-                                [], [], TrashedStatus::fromBoolean($withTrashed)
-                          );
+                            $request, $model->newQuery(), $request->search,
+                            [], [], TrashedStatus::fromBoolean($withTrashed)
+                        );
 
         return $query->tap(function ($query) use ($request, $model) {
             forward_static_call($this->attachableQueryCallable($request, $model), $request, $query, $this);
@@ -258,7 +260,7 @@ class BelongsToMany extends Field implements DeletableContract, FilterableField,
             'avatar' => $resource->resolveAvatarUrl($request),
             'display' => $this->formatDisplayValue($resource),
             'subtitle' => $resource->subtitle(),
-            'value' => $resource->getKey(),
+            'value' => optional(ID::forResource($resource))->value ?? $resource->getKey(),
         ]);
     }
 
@@ -367,10 +369,18 @@ class BelongsToMany extends Field implements DeletableContract, FilterableField,
     protected function defaultFilterableCallback()
     {
         return function (NovaRequest $request, $query, $value, $attribute) {
-            $query->when($request->viaRelationship(), function ($query) use ($value) {
+            $viaRelationship = $request->viaRelationship() && $request->relationshipType === 'belongsToMany';
+
+            $query->when($viaRelationship, function ($query) use ($value) {
                 $query->whereKey($value);
-            }, function ($query) use ($attribute, $value) {
-                $query->whereRelation($this->manyToManyRelationship, $attribute, '=', $value);
+            }, function ($query) use ($request, $attribute, $value) {
+                if ($this->resourceClass::uriKey() !== $request->viaResource) {
+                    $query->whereHas($this->manyToManyRelationship, function ($query) use ($value) {
+                        $query->whereKey($value);
+                    });
+                } else {
+                    $query->whereRelation($this->manyToManyRelationship, $attribute, '=', $value);
+                }
             });
         };
     }
@@ -402,9 +412,8 @@ class BelongsToMany extends Field implements DeletableContract, FilterableField,
      */
     public function asPanel()
     {
-        return Panel::make($this->name)
+        return Panel::make($this->name, [$this])
                     ->withMeta([
-                        'fields' => [$this],
                         'prefixComponent' => true,
                     ])->withComponent('relationship-panel');
     }
@@ -418,11 +427,13 @@ class BelongsToMany extends Field implements DeletableContract, FilterableField,
     {
         return with(app(NovaRequest::class), function ($request) {
             return array_merge([
+                'collapsable' => $this->collapsable,
+                'collapsedByDefault' => $this->collapsedByDefault,
                 'belongsToManyRelationship' => $this->manyToManyRelationship,
                 'relationshipType' => $this->relationshipType(),
                 'debounce' => $this->debounce,
                 'relatable' => true,
-                'perPage'=> $this->resourceClass::$perPageViaRelationship,
+                'perPage' => $this->resourceClass::$perPageViaRelationship,
                 'validationKey' => $this->validationKey(),
                 'resourceName' => $this->resourceName,
                 'searchable' => $this->searchable,

@@ -11,7 +11,11 @@ use Laravel\Nova\Fields\Select;
 use Laravel\Nova\Fields\Text;
 use Laravel\Nova\Http\Requests\ActionRequest;
 use Laravel\Nova\Http\Requests\NovaRequest;
+use Laravel\Nova\Nova;
+use Laravel\Nova\Rules\Filename;
 use Rap2hpoutre\FastExcel\FastExcel;
+use Symfony\Component\HttpFoundation\HeaderUtils;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ExportAsCsv extends Action
 {
@@ -32,21 +36,21 @@ class ExportAsCsv extends Action
     /**
      * The custom query callback.
      *
-     * @var (\Closure(\Illuminate\Database\Eloquent\Builder, \Laravel\Nova\Fields\ActionFields):\Illuminate\Database\Eloquent\Builder)|null
+     * @var (\Closure(\Illuminate\Database\Eloquent\Builder, \Laravel\Nova\Fields\ActionFields):(\Illuminate\Database\Eloquent\Builder))|null
      */
     public $withQueryCallback;
 
     /**
      * The custom field callback.
      *
-     * @var (\Closure(\Laravel\Nova\Http\Requests\NovaRequest):array<int, \Laravel\Nova\Fields\Field>)|null
+     * @var (\Closure(\Laravel\Nova\Http\Requests\NovaRequest):(array<int, \Laravel\Nova\Fields\Field>))|null
      */
     public $withFieldsCallback;
 
     /**
      * The custom format callback.
      *
-     * @var (\Closure(\Illuminate\Database\Eloquent\Model):array<string, mixed>)|null
+     * @var (\Closure(\Illuminate\Database\Eloquent\Model):(array<string, mixed>))|null
      */
     public $withFormatCallback;
 
@@ -125,14 +129,27 @@ class ExportAsCsv extends Action
         );
 
         return $response->successful([
-            (new FastExcel($eloquentGenerator()))->download($exportFilename, $this->withFormatCallback),
+            tap(
+                (new FastExcel($eloquentGenerator()))->download($exportFilename, $this->withFormatCallback),
+                function ($response) use ($exportFilename) {
+                    if ($response instanceof StreamedResponse && ! $response->headers->has('Content-Disposition')) {
+                        $response->headers->set(
+                            'Content-Disposition',
+                            HeaderUtils::makeDisposition(
+                                HeaderUtils::DISPOSITION_ATTACHMENT, $exportFilename, str_replace('%', '', Str::ascii($exportFilename))
+                            )
+                        );
+                    }
+                }
+            ),
+
         ]);
     }
 
     /**
      * Specify a callback that modifies the query used to retrieve the selected models.
      *
-     * @param  (\Closure(\Illuminate\Database\Eloquent\Builder, \Laravel\Nova\Fields\ActionFields):\Illuminate\Database\Eloquent\Builder)|null  $withQueryCallback
+     * @param  (\Closure(\Illuminate\Database\Eloquent\Builder, \Laravel\Nova\Fields\ActionFields):(\Illuminate\Database\Eloquent\Builder))|null  $withQueryCallback
      * @return $this
      */
     public function withQuery($withQueryCallback)
@@ -145,7 +162,7 @@ class ExportAsCsv extends Action
     /**
      * Specify a callback that defines the fields that should be present within the generated file.
      *
-     * @param  (\Closure(\Laravel\Nova\Http\Requests\NovaRequest):array<int, \Laravel\Nova\Fields\Field>)|null  $withFieldsCallback
+     * @param  (\Closure(\Laravel\Nova\Http\Requests\NovaRequest):(array<int, \Laravel\Nova\Fields\Field>))|null  $withFieldsCallback
      * @return $this
      */
     public function withFields($withFieldsCallback)
@@ -158,7 +175,7 @@ class ExportAsCsv extends Action
     /**
      * Specify a callback that defines the field formatting for the generated file.
      *
-     * @param  (\Closure(\Illuminate\Database\Eloquent\Model):array<string, mixed>)|null  $withFormatCallback
+     * @param  (\Closure(\Illuminate\Database\Eloquent\Model):(array<string, mixed>))|null  $withFormatCallback
      * @return $this
      */
     public function withFormat($withFormatCallback)
@@ -171,16 +188,16 @@ class ExportAsCsv extends Action
     /**
      * Add a Select field to the action that allows the selection of the generated file's type.
      *
-     * @param  (\Closure(\Laravel\Nova\Http\Requests\NovaRequest):?string)|string|null  $default
+     * @param  (\Closure(\Laravel\Nova\Http\Requests\NovaRequest):(?string))|string|null  $default
      * @return $this
      */
     public function withTypeSelector($default = null)
     {
         $this->actionFields->push(
-            Select::make('Type', 'writerType')->options(function () {
+            Select::make(Nova::__('Type'), 'writerType')->options(function () {
                 return [
-                    'csv' => 'CSV (.csv)',
-                    'xlsx' => 'Excel (.xlsx)',
+                    'csv' => Nova::__('CSV (.csv)'),
+                    'xlsx' => Nova::__('Excel (.xlsx)'),
                 ];
             })->default($default)->rules(['required', Rule::in(['csv', 'xlsx'])])
         );
@@ -191,13 +208,13 @@ class ExportAsCsv extends Action
     /**
      * Add a Text field to the action to allow users to define the generated file's name.
      *
-     * @param  (\Closure(\Laravel\Nova\Http\Requests\NovaRequest):?string)|string|null  $default
+     * @param  (\Closure(\Laravel\Nova\Http\Requests\NovaRequest):(?string))|string|null  $default
      * @return $this
      */
     public function nameable($default = null)
     {
         $this->actionFields->push(
-            Text::make('Filename', 'filename')->default($default)->rules(['required', 'min:1'])
+            Text::make(Nova::__('Filename'), 'filename')->default($default)->rules(['required', 'min:1', new Filename()])
         );
 
         return $this;

@@ -1,10 +1,15 @@
 <template>
-  <DefaultField :field="field" :errors="errors" :show-help-text="showHelpText">
+  <DefaultField
+    :field="field"
+    :errors="errors"
+    :show-help-text="showHelpText"
+    :full-width-content="fullWidthContent"
+  >
     <template #field>
       <input
         :id="field.attribute"
         type="text"
-        class="w-full form-control form-input form-input-bordered"
+        class="w-full form-control form-input form-control-bordered"
         :class="errorClasses"
         :placeholder="field.name"
         v-model="value"
@@ -33,7 +38,7 @@ export default {
      * Fill the given FormData object with the field's internal value.
      */
     fill(formData) {
-      formData.append(this.field.attribute, this.value || '')
+      formData.append(this.fieldAttribute, this.value || '')
     },
   },
 }

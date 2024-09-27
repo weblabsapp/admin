@@ -24,9 +24,10 @@
       v-if="field"
       @submit.prevent="updateAttachedResource"
       @change="onUpdateFormStatus"
+      :data-form-unique-id="formUniqueId"
       autocomplete="off"
     >
-      <Card class="overflow-hidden mb-8">
+      <Card class="mb-8">
         <!-- Related Resource -->
         <div
           v-if="parentResource"
@@ -50,18 +51,17 @@
         <DefaultField
           :field="field"
           :errors="validationErrors"
-          :show-help-text="field.helpText != null"
+          :show-help-text="true"
         >
           <template #field>
             <SelectControl
               class="w-full"
               dusk="attachable-select"
               :class="{
-                'form-input-border-error': validationErrors.has(
+                'form-control-bordered-error': validationErrors.has(
                   field.attribute
                 ),
               }"
-              :data-testid="`${field.resourceName}-select`"
               v-model:selected="selectedResourceId"
               @change="selectResourceFromSelectControl"
               disabled
@@ -90,7 +90,7 @@
               :via-resource="viaResource"
               :via-resource-id="viaResourceId"
               :via-relationship="viaRelationship"
-              :show-help-text="field.helpText != null"
+              :show-help-text="true"
             />
           </div>
         </LoadingView>
@@ -99,34 +99,35 @@
       <div
         class="flex flex-col mt-3 md:mt-6 md:flex-row items-center justify-center md:justify-end"
       >
-        <CancelButton
+        <Button
           dusk="cancel-update-attached-button"
-          type="button"
           @click="cancelUpdatingAttachedResource"
+          :label="__('Cancel')"
+          variant="ghost"
         />
 
-        <LoadingButton
+        <Button
           class="mr-3"
           dusk="update-and-continue-editing-button"
           @click.prevent="updateAndContinueEditing"
           :disabled="isWorking"
-          :processing="submittedViaUpdateAndContinueEditing"
+          :loading="submittedViaUpdateAndContinueEditing"
         >
           {{ __('Update & Continue Editing') }}
-        </LoadingButton>
+        </Button>
 
-        <LoadingButton
+        <Button
           dusk="update-button"
           type="submit"
           :disabled="isWorking"
-          :processing="submittedViaUpdateAttachedResource"
+          :loading="submittedViaUpdateAttachedResource"
         >
           {{
             __('Update :resource', {
               resource: relatedResourceLabel,
             })
           }}
-        </LoadingButton>
+        </Button>
       </div>
     </form>
   </LoadingView>
@@ -140,14 +141,18 @@ import tap from 'lodash/tap'
 import {
   PerformsSearches,
   TogglesTrashed,
-  Errors,
   FormEvents,
   PreventsFormAbandonment,
   HandlesFormRequest,
 } from '@/mixins'
 import { mapActions } from 'vuex'
+import { Button } from 'laravel-nova-ui'
 
 export default {
+  components: {
+    Button,
+  },
+
   mixins: [
     FormEvents,
     HandlesFormRequest,
@@ -155,6 +160,12 @@ export default {
     TogglesTrashed,
     PreventsFormAbandonment,
   ],
+
+  provide() {
+    return {
+      removeFile: this.removeFile,
+    }
+  },
 
   props: {
     resourceName: {
@@ -240,6 +251,20 @@ export default {
       this.allowLeavingForm()
     },
 
+    removeFile(attribute) {
+      const {
+        resourceName,
+        resourceId,
+        relatedResourceName,
+        relatedResourceId,
+        viaRelationship,
+      } = this
+
+      const uri = Nova.request().delete(
+        `/nova-api/${resourceName}/${resourceId}/${relatedResourceName}/${relatedResourceId}/field/${attribute}?viaRelationship=${viaRelationship}`
+      )
+    },
+
     /**
      * Handle pivot fields loaded event.
      */
@@ -308,10 +333,6 @@ export default {
       this.fields = fields
 
       this.handlePivotFieldsLoaded()
-    },
-
-    resetErrors() {
-      this.validationErrors = new Errors()
     },
 
     /**
@@ -385,6 +406,10 @@ export default {
       try {
         await this.updateRequest()
 
+        window.scrollTo(0, 0)
+
+        this.disableNavigateBackUsingHistory()
+
         this.allowLeavingForm()
 
         this.submittedViaUpdateAndContinueEditing = false
@@ -404,7 +429,9 @@ export default {
       this.handleProceedingToPreviousPage()
       this.allowLeavingForm()
 
-      return window.history.back()
+      this.proceedToPreviousPage(
+        `/resources/${this.resourceName}/${this.resourceId}`
+      )
     },
 
     /**
@@ -454,7 +481,7 @@ export default {
       this.selectInitialResource()
 
       if (this.field) {
-        this.emitFieldValueChange(this.field.attribute, this.selectedResourceId)
+        this.emitFieldValueChange(this.fieldAttribute, this.selectedResourceId)
       }
     },
 

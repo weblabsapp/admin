@@ -1,12 +1,15 @@
+import debounce from 'lodash/debounce'
 import find from 'lodash/find'
 import includes from 'lodash/includes'
+import isNull from 'lodash/isNull'
 import map from 'lodash/map'
-import { Filterable, HasActions, RouteParameters, mapProps } from './index'
+import { Filterable, InteractsWithQueryString, mapProps } from './index'
 import { capitalize } from '@/util'
 import { computed } from 'vue'
+import filter from 'lodash/filter'
 
 export default {
-  mixins: [Filterable, HasActions, RouteParameters],
+  mixins: [Filterable, InteractsWithQueryString],
 
   props: {
     ...mapProps([
@@ -18,28 +21,42 @@ export default {
       'disablePagination',
     ]),
 
-    field: {
-      type: Object,
-    },
-
-    initialPerPage: {
-      type: Number,
-      required: false,
-    },
+    field: { type: Object },
+    initialPerPage: { type: Number, required: false },
   },
 
   provide() {
     return {
+      resourceHasId: computed(() => this.resourceHasId),
+      authorizedToViewAnyResources: computed(
+        () => this.authorizedToViewAnyResources
+      ),
+      authorizedToUpdateAnyResources: computed(
+        () => this.authorizedToUpdateAnyResources
+      ),
+      authorizedToDeleteAnyResources: computed(
+        () => this.authorizedToDeleteAnyResources
+      ),
+      authorizedToRestoreAnyResources: computed(
+        () => this.authorizedToRestoreAnyResources
+      ),
+      selectedResourcesCount: computed(() => this.selectedResources.length),
       selectAllChecked: computed(() => this.selectAllChecked),
       selectAllMatchingChecked: computed(() => this.selectAllMatchingChecked),
+      selectAllOrSelectAllMatchingChecked: computed(
+        () => this.selectAllOrSelectAllMatchingChecked
+      ),
       selectAllAndSelectAllMatchingChecked: computed(
         () => this.selectAllAndSelectAllMatchingChecked
       ),
       selectAllIndeterminate: computed(() => this.selectAllIndeterminate),
+      orderByParameter: computed(() => this.orderByParameter),
+      orderByDirectionParameter: computed(() => this.orderByDirectionParameter),
     }
   },
 
   data: () => ({
+    actions: [],
     allMatchingResourceCount: 0,
     authorizedToRelate: false,
     canceller: null,
@@ -49,9 +66,13 @@ export default {
     loading: true,
     orderBy: '',
     orderByDirection: '',
+    pivotActions: null,
+    resourceHasId: true,
+    resourceHasActions: false,
     resourceResponse: null,
     resourceResponseError: null,
     resources: [],
+    search: '',
     selectAllMatchingResources: false,
     selectedResources: [],
     softDeletes: false,
@@ -60,6 +81,11 @@ export default {
 
   async created() {
     if (Nova.missingResource(this.resourceName)) return Nova.visit('/404')
+
+    const debouncer = debounce(
+      callback => callback(),
+      this.resourceInformation.debounce
+    )
 
     this.initializeSearchFromQueryString()
     this.initializePerPageFromQueryString()
@@ -101,6 +127,11 @@ export default {
         this.getResources()
       }
     )
+
+    this.$watch('search', newValue => {
+      this.search = newValue
+      debouncer(() => this.performSearch())
+    })
   },
 
   beforeUnmount() {
@@ -147,7 +178,11 @@ export default {
     /**
      * Toggle the selection of all resources
      */
-    toggleSelectAll() {
+    toggleSelectAll(e) {
+      if (e) {
+        e.preventDefault()
+      }
+
       if (this.selectAllChecked) {
         this.clearResourceSelections()
       } else {
@@ -160,7 +195,11 @@ export default {
     /**
      * Toggle the selection of all matching resources in the database
      */
-    toggleSelectAllMatching() {
+    toggleSelectAllMatching(e) {
+      if (e) {
+        e.preventDefault()
+      }
+
       if (!this.selectAllMatchingResources) {
         this.selectAllResources()
         this.selectAllMatchingResources = true
@@ -181,6 +220,8 @@ export default {
         const index = this.selectedResources.indexOf(resource)
         if (index > -1) this.selectedResources.splice(index, 1)
       }
+
+      this.selectAllMatchingResources = false
 
       this.getActions()
     },
@@ -269,7 +310,7 @@ export default {
      */
     initializePerPageFromQueryString() {
       this.perPage =
-        this.route.params[this.perPageParameter] ||
+        this.queryStringParams[this.perPageParameter] ||
         this.initialPerPage ||
         this.resourceInformation?.perPageOptions[0] ||
         null
@@ -286,12 +327,15 @@ export default {
      * Execute a search against the resource.
      */
     performSearch() {
-      this.debouncer(() => {
-        this.updateQueryString({
-          [this.pageParameter]: 1,
-          [this.searchParameter]: this.search,
-        })
+      this.updateQueryString({
+        [this.pageParameter]: 1,
+        [this.searchParameter]: this.search,
       })
+    },
+
+    handleActionExecuted() {
+      this.fetchPolicies()
+      this.getResources()
     },
   },
 
@@ -333,6 +377,10 @@ export default {
       return this.selectAllChecked && this.selectAllMatchingChecked
     },
 
+    selectAllOrSelectAllMatchingChecked() {
+      return this.selectAllChecked || this.selectAllMatchingChecked
+    },
+
     /**
      * Determine if all matching resources are selected.
      */
@@ -348,31 +396,41 @@ export default {
     },
 
     /**
+     * Get the Pivot IDs for the selected resources.
+     */
+    selectedPivotIds() {
+      return map(
+        this.selectedResources,
+        resource => resource.id.pivotValue ?? null
+      )
+    },
+
+    /**
      * Get the current search value from the query string.
      */
     currentSearch() {
-      return this.route.params[this.searchParameter] || ''
+      return this.queryStringParams[this.searchParameter] || ''
     },
 
     /**
      * Get the current order by value from the query string.
      */
     currentOrderBy() {
-      return this.route.params[this.orderByParameter] || ''
+      return this.queryStringParams[this.orderByParameter] || ''
     },
 
     /**
      * Get the current order by direction from the query string.
      */
     currentOrderByDirection() {
-      return this.route.params[this.orderByDirectionParameter] || null
+      return this.queryStringParams[this.orderByDirectionParameter] || null
     },
 
     /**
      * Get the current trashed constraint value from the query string.
      */
     currentTrashed() {
-      return this.route.params[this.trashedParameter] || ''
+      return this.queryStringParams[this.trashedParameter] || ''
     },
 
     /**
@@ -383,32 +441,6 @@ export default {
         this.relationshipType == 'belongsToMany' ||
         this.relationshipType == 'morphToMany'
       )
-    },
-
-    /**
-     * Determine if the resource / relationship is "full".
-     */
-    resourceIsFull() {
-      return (
-        (Boolean(this.viaHasOne) && this.resources.length > 0) ||
-        Boolean(this.viaHasOneThrough && this.resources.length > 0)
-      )
-    },
-
-    /**
-     * Determine if the current resource listing is via a has-one relationship.
-     */
-    viaHasOne() {
-      return (
-        this.relationshipType == 'hasOne' || this.relationshipType == 'morphOne'
-      )
-    },
-
-    /**
-     * Determine if the resource is shown via a HasOneThrough relationship.
-     */
-    viaHasOneThrough() {
-      return this.relationshipType == 'hasOneThrough'
     },
 
     /**
@@ -456,11 +488,12 @@ export default {
     /**
      * Determine whether to show the selection checkboxes for resources
      */
-    shouldShowCheckBoxes() {
+    shouldShowCheckboxes() {
       return (
-        Boolean(this.hasResources && !this.viaHasOne) &&
+        Boolean(this.hasResources) &&
+        Boolean(this.resourceHasId) &&
         Boolean(
-          this.actionsAreAvailable ||
+          this.resourceHasActions ||
             this.authorizedToDeleteAnyResources ||
             this.canShowDeleteMenu
         )
@@ -498,11 +531,34 @@ export default {
     },
 
     /**
+     * Determine if the user is authorized to view any listed resource.
+     */
+    authorizedToViewAnyResources() {
+      return (
+        this.resources.length > 0 &&
+        Boolean(this.resourceHasId) &&
+        Boolean(find(this.resources, resource => resource.authorizedToView))
+      )
+    },
+
+    /**
+     * Determine if the user is authorized to view any listed resource.
+     */
+    authorizedToUpdateAnyResources() {
+      return (
+        this.resources.length > 0 &&
+        Boolean(this.resourceHasId) &&
+        Boolean(find(this.resources, resource => resource.authorizedToUpdate))
+      )
+    },
+
+    /**
      * Determine if the user is authorized to delete any listed resource.
      */
     authorizedToDeleteAnyResources() {
       return (
         this.resources.length > 0 &&
+        Boolean(this.resourceHasId) &&
         Boolean(find(this.resources, resource => resource.authorizedToDelete))
       )
     },
@@ -513,6 +569,7 @@ export default {
     authorizedToForceDeleteAnyResources() {
       return (
         this.resources.length > 0 &&
+        Boolean(this.resourceHasId) &&
         Boolean(
           find(this.resources, resource => resource.authorizedToForceDelete)
         )
@@ -523,8 +580,11 @@ export default {
      * Determine if any selected resources may be restored.
      */
     authorizedToRestoreSelectedResources() {
-      return Boolean(
-        find(this.selectedResources, resource => resource.authorizedToRestore)
+      return (
+        Boolean(this.resourceHasId) &&
+        Boolean(
+          find(this.selectedResources, resource => resource.authorizedToRestore)
+        )
       )
     },
 
@@ -534,6 +594,7 @@ export default {
     authorizedToRestoreAnyResources() {
       return (
         this.resources.length > 0 &&
+        Boolean(this.resourceHasId) &&
         Boolean(find(this.resources, resource => resource.authorizedToRestore))
       )
     },
@@ -549,7 +610,7 @@ export default {
      * Return the initial encoded filters from the query string
      */
     initialEncodedFilters() {
-      return this.route.params[this.filterParameter] || ''
+      return this.queryStringParams[this.filterParameter] || ''
     },
 
     /**
@@ -671,7 +732,7 @@ export default {
       return (
         this.disablePagination !== true &&
         this.resourceResponse &&
-        this.hasResources
+        (this.hasResources || this.hasPreviousPage)
       )
     },
 
@@ -725,6 +786,61 @@ export default {
       return this.viaRelationship
         ? this.viaRelationship + '_per_page'
         : this.resourceName + '_per_page'
+    },
+
+    /**
+     * Determine whether there are any standalone actions.
+     */
+    haveStandaloneActions() {
+      return filter(this.allActions, a => a.standalone === true).length > 0
+    },
+
+    /**
+     * Return the available actions.
+     */
+    availableActions() {
+      return this.actions
+    },
+
+    /**
+     * Determine if the resource has any pivot actions available.
+     */
+    hasPivotActions() {
+      return this.pivotActions && this.pivotActions.actions.length > 0
+    },
+
+    /**
+     * Get the name of the pivot model for the resource.
+     */
+    pivotName() {
+      return this.pivotActions ? this.pivotActions.name : ''
+    },
+
+    /**
+     * Determine if the resource has any actions available.
+     */
+    actionsAreAvailable() {
+      return this.allActions.length > 0
+    },
+
+    /**
+     * Get all of the actions available to the resource.
+     */
+    allActions() {
+      return this.hasPivotActions
+        ? this.actions.concat(this.pivotActions.actions)
+        : this.actions
+    },
+
+    availableStandaloneActions() {
+      return this.allActions.filter(a => a.standalone === true)
+    },
+
+    /**
+     * Get the selected resources for the action selector.
+     */
+    selectedResourcesForActionSelector() {
+      return this.selectAllMatchingChecked ? 'all' : this.selectedResources
     },
   },
 }

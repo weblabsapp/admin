@@ -1,25 +1,39 @@
 <template>
   <Modal
-    data-testid="preview-resource-modal"
     :show="show"
     @close-via-escape="$emit('close')"
     role="alertdialog"
-    maxWidth="2xl"
+    size="2xl"
+    :use-focus-trap="false"
   >
-    <LoadingCard
+    <LoadingView
       :loading="loading"
       class="mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden"
     >
       <slot>
         <ModalHeader class="flex items-center">
-          {{ modalTitle }}
-          <span
-            v-if="resource && resource.softDeleted"
-            class="ml-auto bg-red-50 text-red-500 py-0.5 px-2 rounded-full text-xs"
-            >Soft-deleted</span
+          <span>
+            {{ modalTitle }}
+            <span
+              v-if="resource && resource.softDeleted"
+              class="ml-auto bg-red-50 text-red-500 py-0.5 px-2 rounded-full text-xs"
+            >
+              {{ __('Soft Deleted') }}
+            </span>
+          </span>
+
+          <Link
+            dusk="detail-preview-button"
+            :href="$url(`/resources/${resourceName}/${resourceId}`)"
+            class="ml-auto"
+            :alt="__('View :resource', { resource: title })"
           >
+            <Icon type="arrow-right" />
+          </Link>
         </ModalHeader>
-        <ModalContent class="px-8">
+        <ModalContent
+          class="px-8 divide-y divide-gray-100 dark:divide-gray-800 -mx-3"
+        >
           <template v-if="resource">
             <component
               :key="index"
@@ -41,28 +55,29 @@
 
       <ModalFooter>
         <div class="ml-auto">
-          <LoadingButton
-            @click.prevent="$emit('close')"
-            ref="confirmButton"
+          <Button
+            v-if="resource"
             dusk="confirm-preview-button"
-          >
-            {{ __('Close') }}
-          </LoadingButton>
+            @click.prevent="$emit('close')"
+            :label="__('Close')"
+          />
         </div>
       </ModalFooter>
-    </LoadingCard>
+    </LoadingView>
   </Modal>
 </template>
 
 <script>
 import { mapProps } from '@/mixins'
 import { minimum } from '@/util'
-import Loading from '../Loading'
+import { Button } from 'laravel-nova-ui'
 
 export default {
-  emits: ['confirm', 'close'],
+  components: {
+    Button,
+  },
 
-  components: { Loading },
+  emits: ['close'],
 
   props: {
     show: { type: Boolean, default: false },
@@ -120,14 +135,6 @@ export default {
 
           Nova.visit(`/resources/${this.resourceName}`)
         })
-    },
-
-    handleClose() {
-      this.$emit('close')
-    },
-
-    handleConfirm() {
-      this.$emit('confirm')
     },
   },
 

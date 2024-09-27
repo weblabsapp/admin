@@ -2,7 +2,7 @@
   <div class="flex justify-center items-center">
     <div class="w-full">
       <Heading>Get Started</Heading>
-      <p class="text-90 leading-tight mt-3">
+      <p class="leading-tight mt-3">
         Welcome to Nova! Get familiar with Nova and explore its features in the
         documentation:
       </p>
@@ -11,7 +11,7 @@
         <div class="md:grid md:grid-cols-2">
           <div class="border-r border-b border-gray-200 dark:border-gray-700">
             <a :href="resources" class="no-underline flex p-6">
-              <div class="flex justify-center w-11 flex-shrink-0 mr-6">
+              <div class="flex justify-center w-11 shrink-0 mr-6">
                 <svg
                   class="text-primary-500 dark:text-primary-600"
                   xmlns="http://www.w3.org/2000/svg"
@@ -28,7 +28,7 @@
 
               <div>
                 <Heading :level="3">Resources</Heading>
-                <p class="text-90 leading-normal mt-3">
+                <p class="leading-normal mt-3">
                   Nova's resource manager allows you to quickly view and manage
                   your Eloquent model records directly from Nova's intuitive
                   interface.
@@ -39,7 +39,7 @@
 
           <div class="border-b border-gray-200 dark:border-gray-700">
             <a :href="actions" class="no-underline flex p-6">
-              <div class="flex justify-center w-11 flex-shrink-0 mr-6">
+              <div class="flex justify-center w-11 shrink-0 mr-6">
                 <svg
                   class="text-primary-500 dark:text-primary-600"
                   xmlns="http://www.w3.org/2000/svg"
@@ -56,7 +56,7 @@
 
               <div>
                 <Heading :level="3">Actions</Heading>
-                <p class="text-90 leading-normal mt-3">
+                <p class="leading-normal mt-3">
                   Actions perform tasks on a single record or an entire batch of
                   records. Have an action that takes a while? No problem. Nova
                   can queue them using Laravel's powerful queue system.
@@ -67,7 +67,7 @@
 
           <div class="border-r border-b border-gray-200 dark:border-gray-700">
             <a :href="filters" class="no-underline flex p-6">
-              <div class="flex justify-center w-11 flex-shrink-0 mr-6">
+              <div class="flex justify-center w-11 shrink-0 mr-6">
                 <svg
                   class="text-primary-500 dark:text-primary-600"
                   xmlns="http://www.w3.org/2000/svg"
@@ -84,7 +84,7 @@
 
               <div>
                 <Heading :level="3">Filters</Heading>
-                <p class="text-90 leading-normal mt-3">
+                <p class="leading-normal mt-3">
                   Write custom filters for your resource indexes to offer your
                   users quick glances at different segments of your data.
                 </p>
@@ -94,7 +94,7 @@
 
           <div class="border-b border-gray-200 dark:border-gray-700">
             <a :href="lenses" class="no-underline flex p-6">
-              <div class="flex justify-center w-11 flex-shrink-0 mr-6">
+              <div class="flex justify-center w-11 shrink-0 mr-6">
                 <svg
                   class="text-primary-500 dark:text-primary-600"
                   xmlns="http://www.w3.org/2000/svg"
@@ -111,7 +111,7 @@
 
               <div>
                 <Heading :level="3">Lenses</Heading>
-                <p class="text-90 leading-normal mt-3">
+                <p class="leading-normal mt-3">
                   Need to customize a resource list a little more than a filter
                   can provide? No problem. Add lenses to your resource to take
                   full control over the entire Eloquent query.
@@ -124,7 +124,7 @@
             class="border-r md:border-b-0 border-b border-gray-200 dark:border-gray-700"
           >
             <a :href="metrics" class="no-underline flex p-6">
-              <div class="flex justify-center w-11 flex-shrink-0 mr-6">
+              <div class="flex justify-center w-11 shrink-0 mr-6">
                 <svg
                   class="text-primary-500 dark:text-primary-600"
                   xmlns="http://www.w3.org/2000/svg"
@@ -141,7 +141,7 @@
 
               <div>
                 <Heading :level="3">Metrics</Heading>
-                <p class="text-90 leading-normal mt-3">
+                <p class="leading-normal mt-3">
                   Nova makes it painless to quickly display custom metrics for
                   your application. To put the cherry on top, we’ve included
                   query helpers to make it all easy as pie.
@@ -154,7 +154,7 @@
             class="md:border-b-0 border-b border-gray-200 dark:border-gray-700"
           >
             <a :href="cards" class="no-underline flex p-6">
-              <div class="flex justify-center w-11 flex-shrink-0 mr-6">
+              <div class="flex justify-center w-11 shrink-0 mr-6">
                 <svg
                   class="text-primary-500 dark:text-primary-600"
                   xmlns="http://www.w3.org/2000/svg"
@@ -171,7 +171,7 @@
 
               <div>
                 <Heading :level="3">Cards</Heading>
-                <p class="text-90 leading-normal mt-3">
+                <p class="leading-normal mt-3">
                   Nova offers CLI generators for scaffolding your own custom
                   cards. We’ll give you a Vue component and infinite
                   possibilities.

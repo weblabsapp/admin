@@ -11,13 +11,15 @@
     </template>
 
     <form
+      class="space-y-8"
       v-if="panels"
       @submit="submitViaCreateResource"
       @change="onUpdateFormStatus"
+      :data-form-unique-id="formUniqueId"
       autocomplete="off"
       ref="form"
     >
-      <div class="mb-8 space-y-4">
+      <div class="space-y-4">
         <component
           v-for="panel in panels"
           :key="panel.id"
@@ -28,47 +30,47 @@
           :shown-via-new-relation-modal="shownViaNewRelationModal"
           :panel="panel"
           :name="panel.name"
+          :dusk="`${panel.attribute}-panel`"
           :resource-name="resourceName"
           :fields="panel.fields"
           :form-unique-id="formUniqueId"
-          mode="form"
+          :mode="mode"
           :validation-errors="validationErrors"
           :via-resource="viaResource"
           :via-resource-id="viaResourceId"
           :via-relationship="viaRelationship"
+          :show-help-text="true"
         />
       </div>
 
       <!-- Create Button -->
       <div
-        class="flex flex-col md:flex-row md:items-center justify-center md:justify-end space-y-2 md:space-y-0 space-x-3"
+        class="flex flex-col md:flex-row md:items-center justify-center md:justify-end space-y-2 md:space-y-0 md:space-x-3"
       >
-        <CancelButton
-          tabindex="0"
-          dusk="cancel-create-button"
-          type="button"
+        <Button
           @click="$emit('create-cancelled')"
+          variant="ghost"
+          :label="__('Cancel')"
+          :disabled="isWorking"
+          dusk="cancel-create-button"
         />
 
-        <LoadingButton
+        <Button
           v-if="shouldShowAddAnotherButton"
-          dusk="create-and-add-another-button"
-          type="button"
           @click="submitViaCreateResourceAndAddAnother"
-          :disabled="isWorking"
+          :label="__('Create & Add Another')"
           :loading="wasSubmittedViaCreateResourceAndAddAnother"
-        >
-          {{ __('Create & Add Another') }}
-        </LoadingButton>
+          dusk="create-and-add-another-button"
+        />
 
-        <LoadingButton
-          dusk="create-button"
+        <Button
           type="submit"
+          dusk="create-button"
+          @click="submitViaCreateResource"
+          :label="createButtonLabel"
           :disabled="isWorking"
           :loading="wasSubmittedViaCreateResource"
-        >
-          {{ createButtonLabel }}
-        </LoadingButton>
+        />
       </div>
     </form>
   </LoadingView>
@@ -76,18 +78,29 @@
 
 <script>
 import each from 'lodash/each'
+import isNil from 'lodash/isNil'
 import tap from 'lodash/tap'
 import {
-  Errors,
   HandlesFormRequest,
   HandlesUploads,
   InteractsWithResourceInformation,
   mapProps,
 } from '@/mixins'
 import { mapActions, mapMutations } from 'vuex'
+import { Button } from 'laravel-nova-ui'
 
 export default {
-  emits: ['resource-created', 'create-cancelled', 'update-form-status'],
+  components: {
+    Button,
+  },
+
+  emits: [
+    'resource-created',
+    'resource-created-and-adding-another',
+    'create-cancelled',
+    'update-form-status',
+    'finished-loading',
+  ],
 
   mixins: [
     HandlesFormRequest,
@@ -160,7 +173,7 @@ export default {
 
     this.getFields()
 
-    this.mode == 'form' ? this.allowLeavingForm() : this.allowLeavingModal()
+    this.mode === 'form' ? this.allowLeavingForm() : this.allowLeavingModal()
   },
 
   methods: {
@@ -177,6 +190,8 @@ export default {
      */
     handleResourceLoaded() {
       this.loading = false
+
+      this.$emit('finished-loading')
 
       Nova.$emit('resource-loaded', {
         resourceName: this.resourceName,
@@ -200,6 +215,7 @@ export default {
           params: {
             editing: true,
             editMode: 'create',
+            inline: this.shownViaNewRelationModal,
             fromResourceId: this.fromResourceId,
             viaResource: this.viaResource,
             viaResourceId: this.viaResourceId,
@@ -255,9 +271,13 @@ export default {
           if (this.submittedViaCreateResource) {
             this.$emit('resource-created', { id, redirect })
           } else {
+            window.scrollTo(0, 0)
+
+            this.$emit('resource-created-and-adding-another', { id })
+
             // Reset the form by refetching the fields
             this.getFields()
-            this.validationErrors = new Errors()
+            this.resetErrors()
             this.submittedViaCreateAndAddAnother = false
             this.submittedViaCreateResource = false
             this.isWorking = false
@@ -311,6 +331,10 @@ export default {
           })
         })
 
+        if (!isNil(this.fromResourceId)) {
+          formData.append('fromResourceId', this.fromResourceId)
+        }
+
         formData.append('viaResource', this.viaResource)
         formData.append('viaResourceId', this.viaResourceId)
         formData.append('viaRelationship', this.viaRelationship)
@@ -351,11 +375,11 @@ export default {
     },
 
     shownViaNewRelationModal() {
-      return this.mode == 'modal'
+      return this.mode === 'modal'
     },
 
     inFormMode() {
-      return this.mode == 'form'
+      return this.mode === 'form'
     },
 
     canAddMoreResources() {

@@ -4,7 +4,7 @@
 
     <template #filter>
       <input
-        class="w-full flex form-control form-control-sm form-input form-input-bordered"
+        class="w-full flex form-control h-8 text-xs form-input form-control-bordered"
         type="date"
         :dusk="`${filter.name}-date-filter`"
         name="date-filter"
@@ -35,7 +35,7 @@ export default {
 
   methods: {
     handleChange(event) {
-      let value = event?.target?.value || event
+      let value = event?.target?.value ?? event
 
       this.$store.commit(`${this.resourceName}/updateFilterState`, {
         filterClass: this.filterKey,

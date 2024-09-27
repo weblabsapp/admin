@@ -13,15 +13,17 @@
     <Heading
       class="mb-3"
       v-text="__('Attach :resource', { resource: relatedResourceLabel })"
+      dusk="attach-heading"
     />
 
     <form
       v-if="field"
       @submit.prevent="attachResource"
       @change="onUpdateFormStatus"
+      :data-form-unique-id="formUniqueId"
       autocomplete="off"
     >
-      <Card class="overflow-hidden mb-8">
+      <Card class="mb-8">
         <!-- Related Resource -->
         <div
           v-if="parentResource"
@@ -45,15 +47,15 @@
         <DefaultField
           :field="field"
           :errors="validationErrors"
-          :show-help-text="field.helpText != null"
+          :show-help-text="true"
         >
           <template #field>
             <div class="flex items-center">
               <SearchInput
                 v-if="field.searchable"
-                :data-testid="`${field.resourceName}-search-input`"
+                :dusk="`${field.resourceName}-search-input`"
                 @input="performSearch"
-                @clear="clearSelection"
+                @clear="clearResourceSelection"
                 @selected="selectResource"
                 :debounce="field.debounce"
                 :value="selectedResource"
@@ -74,16 +76,16 @@
 
                 <template #option="{ selected, option }">
                   <div class="flex items-center">
-                    <div v-if="option.avatar" class="mr-3">
+                    <div v-if="option.avatar" class="flex-none mr-3">
                       <img
                         :src="option.avatar"
                         class="w-8 h-8 rounded-full block"
                       />
                     </div>
 
-                    <div>
+                    <div class="flex-auto">
                       <div
-                        class="text-sm font-semibold leading-5 text-90"
+                        class="text-sm font-semibold leading-5"
                         :class="{ 'text-white': selected }"
                       >
                         {{ option.display }}
@@ -108,14 +110,13 @@
 
               <SelectControl
                 v-else
-                dusk="attachable-select"
                 class="w-full"
                 :class="{
-                  'form-input-border-error': validationErrors.has(
+                  'form-control-bordered-error': validationErrors.has(
                     field.attribute
                   ),
                 }"
-                :data-testid="`${field.resourceName}-select`"
+                dusk="attachable-select"
                 v-model:selected="selectedResourceId"
                 @change="selectResourceFromSelectControl"
                 :options="availableResources"
@@ -173,7 +174,7 @@
               :via-resource="viaResource"
               :via-resource-id="viaResourceId"
               :via-relationship="viaRelationship"
-              :show-help-text="field.helpText != null"
+              :show-help-text="true"
             />
           </div>
         </LoadingView>
@@ -183,33 +184,34 @@
       <div
         class="flex flex-col md:flex-row md:items-center justify-center md:justify-end space-y-2 md:space-y-0 space-x-3"
       >
-        <CancelButton
+        <Button
           dusk="cancel-attach-button"
-          type="button"
           @click="cancelAttachingResource"
+          :label="__('Cancel')"
+          variant="ghost"
         />
 
-        <LoadingButton
+        <Button
           dusk="attach-and-attach-another-button"
           @click.native.prevent="attachAndAttachAnother"
           :disabled="isWorking"
-          :processing="submittedViaAttachAndAttachAnother"
+          :loading="submittedViaAttachAndAttachAnother"
         >
           {{ __('Attach & Attach Another') }}
-        </LoadingButton>
+        </Button>
 
-        <LoadingButton
-          dusk="attach-button"
+        <Button
           type="submit"
+          dusk="attach-button"
           :disabled="isWorking"
-          :processing="submittedViaAttachResource"
+          :loading="submittedViaAttachResource"
         >
           {{
             __('Attach :resource', {
               resource: relatedResourceLabel,
             })
           }}
-        </LoadingButton>
+        </Button>
       </div>
     </form>
   </LoadingView>
@@ -218,19 +220,22 @@
 <script>
 import each from 'lodash/each'
 import find from 'lodash/find'
-import isNil from 'lodash/isNil'
 import tap from 'lodash/tap'
 import {
   PerformsSearches,
   TogglesTrashed,
-  Errors,
   FormEvents,
   HandlesFormRequest,
   PreventsFormAbandonment,
 } from '@/mixins'
 import { mapActions } from 'vuex'
+import { Button } from 'laravel-nova-ui'
 
 export default {
+  components: {
+    Button,
+  },
+
   mixins: [
     FormEvents,
     HandlesFormRequest,
@@ -280,6 +285,7 @@ export default {
     selectedResource: null,
     selectedResourceId: null,
     relationModalOpen: false,
+    initializingWithExistingResource: false,
   }),
 
   created() {
@@ -374,14 +380,12 @@ export default {
         })
     },
 
-    resetErrors() {
-      this.validationErrors = new Errors()
-    },
-
     /**
      * Get all of the available resources for the current search / trashed state.
      */
     getAvailableResources(search = '') {
+      Nova.$progress.start()
+
       return Nova.request()
         .get(
           `/nova-api/${this.resourceName}/${this.resourceId}/attachable/${this.relatedResourceName}`,
@@ -389,15 +393,24 @@ export default {
             params: {
               search,
               current: this.selectedResourceId,
+              first: this.initializingWithExistingResource,
               withTrashed: this.withTrashed,
               viaRelationship: this.viaRelationship,
             },
           }
         )
         .then(response => {
+          Nova.$progress.done()
+
+          if (this.isSearchable) {
+            this.initializingWithExistingResource = false
+          }
           this.availableResources = response.data.resources
           this.withTrashed = response.data.withTrashed
           this.softDeletes = response.data.softDeletes
+        })
+        .catch(e => {
+          Nova.$progress.done()
         })
     },
 
@@ -448,6 +461,10 @@ export default {
       try {
         await this.attachRequest()
 
+        window.scrollTo(0, 0)
+
+        this.disableNavigateBackUsingHistory()
+
         this.allowLeavingForm()
 
         this.submittedViaAttachAndAttachAnother = false
@@ -467,7 +484,9 @@ export default {
       this.handleProceedingToPreviousPage()
       this.allowLeavingForm()
 
-      return window.history.back()
+      this.proceedToPreviousPage(
+        `/resources/${this.resourceName}/${this.resourceId}`
+      )
     },
 
     /**
@@ -514,7 +533,7 @@ export default {
       this.selectInitialResource()
 
       if (this.field) {
-        this.emitFieldValueChange(this.field.attribute, this.selectedResourceId)
+        this.emitFieldValueChange(this.fieldAttribute, this.selectedResourceId)
       }
     },
 
@@ -562,6 +581,15 @@ export default {
     closeRelationModal() {
       this.relationModalOpen = false
       Nova.$emit('create-relation-modal-closed')
+    },
+
+    clearResourceSelection() {
+      this.clearSelection()
+
+      if (!this.isSearchable) {
+        this.initializingWithExistingResource = false
+        this.getAvailableResources()
+      }
     },
   },
 
